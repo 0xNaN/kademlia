@@ -1,6 +1,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -define(setup(F), {setup, fun start/0, F}).
+-define(pass, ?_assert(true)).
+-define(fail, ?_assert(false)).
 
 start() ->
     Id = 1,
@@ -9,7 +11,8 @@ start() ->
 
 peer_suite_test_() ->
     [?setup(fun should_store_data/1),
-    ?setup(fun should_overwrite_data_with_same_key/1)].
+    ?setup(fun should_overwrite_data_with_same_key/1),
+    ?setup(fun should_answer_with_pong_to_a_ping/1)].
 
 should_store_data(PeerPid) ->
     Key = mykey,
@@ -28,3 +31,12 @@ should_overwrite_data_with_same_key(PeerPid) ->
     peer:store({Key, SecondValue}, PeerPid),
     RetrievalData = peer:find_value_of(Key, PeerPid),
     [?_assertEqual(SecondValue, RetrievalData)].
+
+should_answer_with_pong_to_a_ping(PeerPid) ->
+    peer:ping(self(), PeerPid),
+    receive
+        {pong, PeerPid} ->
+            [?pass];
+        _ ->
+            [?fail]
+    end.
