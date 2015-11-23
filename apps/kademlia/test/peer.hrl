@@ -12,7 +12,8 @@ start() ->
 peer_suite_test_() ->
     [?setup(fun should_store_data/1),
     ?setup(fun should_overwrite_data_with_same_key/1),
-    ?setup(fun should_answer_with_pong_to_a_ping/1)].
+    ?setup(fun should_answer_with_pong_to_a_ping/1),
+    ?setup(fun should_return_its_id/1)].
 
 should_store_data(PeerPid) ->
     Key = mykey,
@@ -40,3 +41,7 @@ should_answer_with_pong_to_a_ping(PeerPid) ->
         _ ->
             [?fail]
     end.
+
+should_return_its_id(PeerPid) ->
+    Id = peer:id_of(PeerPid),
+    [?_assertEqual(1, Id)].
