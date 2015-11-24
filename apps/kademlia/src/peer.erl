@@ -44,30 +44,29 @@ id_of(PeerPid) ->
     end.
 
 peer(Id, Map, KbucketPid) ->
-    %TODO: each of these ops should update the bucket
     receive
         {store, FromPeer, {Key, Value}} ->
-            kbucket:put(FromPeer),
+            kbucket:put(KbucketPid, FromPeer),
             NewMap = Map#{Key => Value},
             peer(Id, NewMap, KbucketPid);
 
         {ping, FromPeer} ->
-            kbucket:put(FromPeer),
+            kbucket:put(KbucketPid, FromPeer),
             pong(FromPeer),
             peer(Id, Map, KbucketPid);
 
         {pong, FromPeer} ->
-            kbucket:put(FromPeer),
+            kbucket:put(KbucketPid, FromPeer),
             peer(Id, Map, KbucketPid);
 
         {find_value, FromPeer, Key} ->
-            kbucket:put(FromPeer),
+            kbucket:put(KbucketPid, FromPeer),
             #{Key := Value} = Map,
             FromPeer ! {self(), Value},
             peer(Id, Map, KbucketPid);
 
         {find_closest_peers, FromPeer, Key} ->
-            kbucket:put(FromPeer),
+            kbucket:put(KbucketPid, FromPeer),
             ClosestPeers = kbucket:closest_peers(KbucketPid, Key),
             FromPeer ! {self(), ClosestPeers},
             peer(Id, Map, KbucketPid);
