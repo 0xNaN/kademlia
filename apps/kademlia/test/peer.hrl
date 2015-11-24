@@ -23,15 +23,18 @@ peer_suite_test_() ->
     ?setup(fun should_return_its_id/1)].
 
 should_store_data({PeerPid, _}) ->
+    FakePeer = self(),
     Key = mykey,
     Value = "myvalue",
 
     meck:expect(kbucket, put, fun(_) -> ok end),
     peer:store({Key, Value}, PeerPid),
     RetrievalData = peer:find_value_of(Key, PeerPid),
-    [?_assertEqual(Value, RetrievalData)].
+    [?_assertEqual(Value, RetrievalData),
+     ?_assert(meck:called(kbucket, put, [FakePeer]))].
 
 should_overwrite_data_with_same_key({PeerPid, _}) ->
+    FakePeer = self(),
     Key = mykey,
     FirstValue = "myvalue",
     SecondValue = "updated",
@@ -41,7 +44,8 @@ should_overwrite_data_with_same_key({PeerPid, _}) ->
     peer:store({Key, SecondValue}, PeerPid),
     RetrievalData = peer:find_value_of(Key, PeerPid),
 
-    [?_assertEqual(SecondValue, RetrievalData)].
+    [?_assertEqual(SecondValue, RetrievalData),
+     ?_assert(meck:called(kbucket, put, [FakePeer]))].
 
 should_answer_with_pong_to_a_ping({PeerPid, _}) ->
     FakePeer = self(),
