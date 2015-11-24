@@ -67,8 +67,6 @@ should_update_kbucket_if_receive_a_pong({PeerPid, KbucketPid}) ->
 
     meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:pong(PeerPid),
-    % since we check that the peer called kbucket:put but doesn't
-    % wait an answer
     timer:sleep(10),
 
     [?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))].
