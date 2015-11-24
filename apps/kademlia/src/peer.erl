@@ -47,7 +47,7 @@ peer(Id, Map, KbucketPid) ->
 
         {ping, FromPeer} ->
             kbucket:put(FromPeer, KbucketPid),
-            FromPeer ! {pong, self()},
+            pong(FromPeer, self()),
             peer(Id, Map, KbucketPid);
 
         {pong, FromPeer} ->
