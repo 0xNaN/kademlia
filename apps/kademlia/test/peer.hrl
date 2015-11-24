@@ -3,6 +3,9 @@
 -define(setup(F), {setup, fun start/0, fun teardown/1, F}).
 -define(pass, ?_assert(true)).
 -define(fail, ?_assert(false)).
+-define(one_any_arg(X), fun(_) -> X end).
+-define(two_any_args(X), fun(_, _) -> X end).
+-define(return(V), V).
 -define(assertReceive(Data, Asserts), receive Data ->  Asserts;  _ ->  [?fail]  end).
 
 start() ->
@@ -28,7 +31,7 @@ should_store_data({PeerPid, KbucketPid}) ->
     FakePeer = self(),
     {Key, Value} = {mykey, "myvalue"},
 
-    meck:expect(kbucket, put, fun(_, _) -> ok end),
+    meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:store({Key, Value}, PeerPid),
     peer:find_value_of(Key, PeerPid),
 
@@ -41,7 +44,7 @@ should_overwrite_data_with_same_key({PeerPid, KbucketPid}) ->
     {Key, FirstValue} = {mykey, "myvalue"},
     SecondValue = "updated",
 
-    meck:expect(kbucket, put, fun(_, _) -> ok end),
+    meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:store({Key, FirstValue}, PeerPid),
     peer:store({Key, SecondValue}, PeerPid),
     peer:find_value_of(Key, PeerPid),
@@ -53,7 +56,7 @@ should_overwrite_data_with_same_key({PeerPid, KbucketPid}) ->
 should_answer_with_pong_to_a_ping({PeerPid, KbucketPid}) ->
     FakePeer = self(),
 
-    meck:expect(kbucket, put, fun(_, _) -> ok end),
+    meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:ping(PeerPid),
 
     ?assertReceive({pong, PeerPid},
@@ -62,7 +65,7 @@ should_answer_with_pong_to_a_ping({PeerPid, KbucketPid}) ->
 should_update_kbucket_if_receive_a_pong({PeerPid, KbucketPid}) ->
     FakePeer = self(),
 
-    meck:expect(kbucket, put, fun(_, _) -> ok end),
+    meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:pong(PeerPid),
     % since we check that the peer called kbucket:put but doesn't
     % wait an answer
@@ -74,8 +77,8 @@ should_contact_the_kbucket_for_its_closest_peer_to_a_key({PeerPid, KbucketPid}) 
     FakePeer = self(),
     KeyToSearch = 2,
 
-    meck:expect(kbucket, closest_peers, fun(_, _) -> [1, 2] end),
-    meck:expect(kbucket, put, fun(_, _) -> ok end),
+    meck:expect(kbucket, closest_peers, ?two_any_args(?return([1, 2]))),
+    meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:find_closest_peers(KeyToSearch, PeerPid),
 
     ?assertReceive({PeerPid, Peers},
