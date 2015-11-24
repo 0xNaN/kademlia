@@ -20,9 +20,7 @@ store({Key, Value}, PeerPid) ->
 
 find_value_of(Key, PeerPid) ->
     PeerPid ! {find_value, self(), Key},
-    receive
-        {PeerPid, Value} -> Value
-    end.
+    ok.
 
 find_closest_peers(Key, PeerPid) ->
     PeerPid ! {find_closest_peers, self(), Key},

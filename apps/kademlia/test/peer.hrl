@@ -30,9 +30,12 @@ should_store_data({PeerPid, KbucketPid}) ->
 
     meck:expect(kbucket, put, fun(_, _) -> ok end),
     peer:store({Key, Value}, PeerPid),
-    RetrievalData = peer:find_value_of(Key, PeerPid),
-    [?_assertEqual(Value, RetrievalData),
-     ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))].
+    peer:find_value_of(Key, PeerPid),
+    receive
+        {PeerPid, ResponseValue} ->
+            [?_assertEqual(Value, ResponseValue),
+             ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))]
+    end.
 
 should_overwrite_data_with_same_key({PeerPid, KbucketPid}) ->
     FakePeer = self(),
@@ -43,10 +46,12 @@ should_overwrite_data_with_same_key({PeerPid, KbucketPid}) ->
 
     peer:store({Key, FirstValue} , PeerPid),
     peer:store({Key, SecondValue}, PeerPid),
-    RetrievalData = peer:find_value_of(Key, PeerPid),
-
-    [?_assertEqual(SecondValue, RetrievalData),
-     ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))].
+    peer:find_value_of(Key, PeerPid),
+    receive
+        {PeerPid, ResponseValue} ->
+            [?_assertEqual(SecondValue, ResponseValue),
+             ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))]
+    end.
 
 should_answer_with_pong_to_a_ping({PeerPid, KbucketPid}) ->
     FakePeer = self(),
