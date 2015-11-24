@@ -1,13 +1,13 @@
 -module(peer).
--export([start/1,
-         start/2,
-         peer/3,
-         store/2,
-         find_value_of/2,
-         find_closest_peers/2,
-         pong/1,
-         ping/1,
-         id_of/1]).
+
+-export([start/1, start/2]).
+-export([peer/3]).
+-export([store/2]).
+-export([find_value_of/2]).
+-export([find_closest_peers/2]).
+-export([pong/1]).
+-export([ping/1]).
+-export([id_of/1]).
 
 start(Id) ->
     spawn(fun() -> peer(Id, #{}, kbucket:start(Id)) end).
