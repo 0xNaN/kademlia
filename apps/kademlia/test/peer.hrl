@@ -3,11 +3,12 @@
 -define(setup(F), {setup, fun start/0, fun teardown/1, F}).
 -define(pass, ?_assert(true)).
 -define(fail, ?_assert(false)).
+-define(assertReceive(Data, Asserts), receive Data ->  Asserts;  _ ->  [?fail]  end).
 
 start() ->
-    Id = 1,
     meck:new(kbucket, [non_strict]),
     KbucketPid = self(),
+    Id = 1,
     PeerPid = peer:start(Id, KbucketPid),
     {PeerPid, KbucketPid}.
 
@@ -17,75 +18,70 @@ teardown({_, _}) ->
 
 peer_suite_test_() ->
     [?setup(fun should_store_data/1),
-    ?setup(fun should_overwrite_data_with_same_key/1),
-    ?setup(fun should_answer_with_pong_to_a_ping/1),
-    ?setup(fun should_update_kbucket_if_receive_a_pong/1),
-    ?setup(fun should_contact_the_kbucket_for_its_closest_peer_to_a_key/1),
-    ?setup(fun should_return_its_id/1)].
+     ?setup(fun should_overwrite_data_with_same_key/1),
+     ?setup(fun should_answer_with_pong_to_a_ping/1),
+     ?setup(fun should_update_kbucket_if_receive_a_pong/1),
+     ?setup(fun should_contact_the_kbucket_for_its_closest_peer_to_a_key/1),
+     ?setup(fun should_return_its_id/1)].
 
 should_store_data({PeerPid, KbucketPid}) ->
     FakePeer = self(),
-    Key = mykey,
-    Value = "myvalue",
+    {Key, Value} = {mykey, "myvalue"},
 
     meck:expect(kbucket, put, fun(_, _) -> ok end),
     peer:store({Key, Value}, PeerPid),
     peer:find_value_of(Key, PeerPid),
-    receive
-        {PeerPid, ResponseValue} ->
-            [?_assertEqual(Value, ResponseValue),
-             ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))]
-    end.
+
+    ?assertReceive({PeerPid, ResponseValue},
+                    [?_assertEqual(Value, ResponseValue),
+                     ?_assertEqual(2, meck:num_calls(kbucket, put, [KbucketPid, FakePeer]))]).
 
 should_overwrite_data_with_same_key({PeerPid, KbucketPid}) ->
     FakePeer = self(),
-    Key = mykey,
-    FirstValue = "myvalue",
+    {Key, FirstValue} = {mykey, "myvalue"},
     SecondValue = "updated",
-    meck:expect(kbucket, put, fun(_, _) -> ok end),
 
-    peer:store({Key, FirstValue} , PeerPid),
+    meck:expect(kbucket, put, fun(_, _) -> ok end),
+    peer:store({Key, FirstValue}, PeerPid),
     peer:store({Key, SecondValue}, PeerPid),
     peer:find_value_of(Key, PeerPid),
-    receive
-        {PeerPid, ResponseValue} ->
-            [?_assertEqual(SecondValue, ResponseValue),
-             ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))]
-    end.
+
+    ?assertReceive({PeerPid, ResponseValue},
+                    [?_assertEqual(SecondValue, ResponseValue),
+                     ?_assertEqual(3, meck:num_calls(kbucket, put, [KbucketPid, FakePeer]))]).
 
 should_answer_with_pong_to_a_ping({PeerPid, KbucketPid}) ->
     FakePeer = self(),
+
     meck:expect(kbucket, put, fun(_, _) -> ok end),
     peer:ping(PeerPid),
-    receive
-        {pong, PeerPid} ->
-            [?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))];
-        _ ->
-            [?fail]
-    end.
+
+    ?assertReceive({pong, PeerPid},
+                    [?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))]).
 
 should_update_kbucket_if_receive_a_pong({PeerPid, KbucketPid}) ->
     FakePeer = self(),
+
     meck:expect(kbucket, put, fun(_, _) -> ok end),
     peer:pong(PeerPid),
     % since we check that the peer called kbucket:put but doesn't
     % wait an answer
     timer:sleep(10),
+
     [?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))].
 
 should_contact_the_kbucket_for_its_closest_peer_to_a_key({PeerPid, KbucketPid}) ->
     FakePeer = self(),
-    Key = 2,
+    KeyToSearch = 2,
+
     meck:expect(kbucket, closest_peers, fun(_, _) -> [1, 2] end),
     meck:expect(kbucket, put, fun(_, _) -> ok end),
+    peer:find_closest_peers(KeyToSearch, PeerPid),
 
-    peer:find_closest_peers(Key, PeerPid),
-    receive
-        {PeerPid, Peers} ->
-            [?_assertEqual([1, 2], Peers),
-             ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer])),
-             ?_assert(meck:called(kbucket, closest_peers, [KbucketPid, Key]))]
-    end.
+    ?assertReceive({PeerPid, Peers},
+                    [?_assertEqual([1, 2], Peers),
+                     ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer])),
+                     ?_assert(meck:called(kbucket, closest_peers, [KbucketPid, KeyToSearch]))]).
 
 should_return_its_id({PeerPid, _}) ->
     Id = peer:id_of(PeerPid),
