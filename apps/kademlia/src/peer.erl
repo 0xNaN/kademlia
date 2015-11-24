@@ -41,20 +41,22 @@ id_of(PeerPid) ->
 peer(Id, Map, KbucketPid) ->
     %TODO: each of these ops should update the bucket
     receive
-        {store, _, {Key, Value}} ->
+        {store, FromPeer, {Key, Value}} ->
+            kbucket:put(FromPeer),
             NewMap = Map#{Key => Value},
             peer(Id, NewMap, KbucketPid);
 
         {ping, FromPeer} ->
-            kbucket:put(FromPeer, KbucketPid),
+            kbucket:put(FromPeer),
             pong(FromPeer, self()),
             peer(Id, Map, KbucketPid);
 
         {pong, FromPeer} ->
-            kbucket:put(FromPeer, KbucketPid),
+            kbucket:put(FromPeer),
             peer(Id, Map, KbucketPid);
 
         {find_value, FromPeer, Key} ->
+            kbucket:put(FromPeer),
             #{Key := Value} = Map,
             FromPeer ! {self(), Value},
             peer(Id, Map, KbucketPid);

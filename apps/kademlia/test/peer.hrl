@@ -26,6 +26,7 @@ should_store_data({PeerPid, _}) ->
     Key = mykey,
     Value = "myvalue",
 
+    meck:expect(kbucket, put, fun(_) -> ok end),
     peer:store({Key, Value}, PeerPid),
     RetrievalData = peer:find_value_of(Key, PeerPid),
     [?_assertEqual(Value, RetrievalData)].
@@ -34,28 +35,33 @@ should_overwrite_data_with_same_key({PeerPid, _}) ->
     Key = mykey,
     FirstValue = "myvalue",
     SecondValue = "updated",
+    meck:expect(kbucket, put, fun(_) -> ok end),
 
     peer:store({Key, FirstValue} , PeerPid),
     peer:store({Key, SecondValue}, PeerPid),
     RetrievalData = peer:find_value_of(Key, PeerPid),
+
     [?_assertEqual(SecondValue, RetrievalData)].
 
 should_answer_with_pong_to_a_ping({PeerPid, KbucketPid}) ->
     FakePeer = self(),
-    meck:expect(kbucket, put, fun(_, _) -> ok end),
+    meck:expect(kbucket, put, fun(_) -> ok end),
     peer:ping(PeerPid, FakePeer),
     receive
         {pong, PeerPid} ->
-            [?_assert(meck:called(kbucket, put, [FakePeer, KbucketPid]))];
+            [?_assert(meck:called(kbucket, put, [FakePeer]))];
         _ ->
             [?fail]
     end.
 
 should_update_kbucket_if_receive_a_pong({PeerPid, KbucketPid}) ->
     FakePeer = self(),
-    meck:expect(kbucket, put, fun(_, _) -> ok end),
+    meck:expect(kbucket, put, fun(_) -> ok end),
     peer:pong(PeerPid, FakePeer),
-    [?_assert(meck:called(kbucket, put, [FakePeer, KbucketPid]))].
+    % since we check that the peer called kbucket:put but doesn't
+    % wait an answer
+    timer:sleep(10),
+    [?_assert(meck:called(kbucket, put, [FakePeer]))].
 
 
 should_return_its_id({PeerPid, _}) ->
