@@ -1,13 +1,16 @@
 -module(peer).
 -export([start/1,
-         peer/2,
+         start/2,
+         peer/3,
          store/2,
          find_value_of/2,
          ping/2,
          id_of/1]).
 
 start(Id) ->
-    spawn(fun() -> peer(Id, #{}) end).
+    spawn(fun() -> peer(Id, #{}, kbucket:start(Id)) end).
+start(Id, KbucketPid) ->
+    spawn(fun() -> peer(Id, #{}, KbucketPid) end).
 
 store({Key, Value}, PeerPid) ->
     PeerPid ! {store, self(), {Key, Value}},
@@ -30,27 +33,28 @@ id_of(PeerPid) ->
             Id
     end.
 
-peer(Id, Map) ->
+peer(Id, Map, KbucketPid) ->
     %TODO: each of these ops should update the bucket
     receive
         {store, _, {Key, Value}} ->
             NewMap = Map#{Key => Value},
-            peer(Id, NewMap);
+            peer(Id, NewMap, KbucketPid);
 
         {ping, FromPeer} ->
+            kbucket:put(FromPeer, KbucketPid),
             FromPeer ! {pong, self()},
-            peer(Id, Map);
+            peer(Id, Map, KbucketPid);
 
         {find_value, FromPeer, Key} ->
             #{Key := Value} = Map,
             FromPeer ! {self(), Value},
-            peer(Id, Map);
+            peer(Id, Map, KbucketPid);
 
         {id, FromPeer} ->
             FromPeer ! {self(), Id},
-            peer(Id, Map);
+            peer(Id, Map, KbucketPid);
 
-        _ -> peer(Id, Map)
+        _ -> peer(Id, Map, KbucketPid)
     end.
 
 -ifdef(TEST).
