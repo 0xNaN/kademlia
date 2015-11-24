@@ -43,10 +43,10 @@ should_overwrite_data_with_same_key({PeerPid, _}) ->
 
     [?_assertEqual(SecondValue, RetrievalData)].
 
-should_answer_with_pong_to_a_ping({PeerPid, KbucketPid}) ->
+should_answer_with_pong_to_a_ping({PeerPid, _}) ->
     FakePeer = self(),
     meck:expect(kbucket, put, fun(_) -> ok end),
-    peer:ping(PeerPid, FakePeer),
+    peer:ping(PeerPid),
     receive
         {pong, PeerPid} ->
             [?_assert(meck:called(kbucket, put, [FakePeer]))];
@@ -54,10 +54,10 @@ should_answer_with_pong_to_a_ping({PeerPid, KbucketPid}) ->
             [?fail]
     end.
 
-should_update_kbucket_if_receive_a_pong({PeerPid, KbucketPid}) ->
+should_update_kbucket_if_receive_a_pong({PeerPid, _}) ->
     FakePeer = self(),
     meck:expect(kbucket, put, fun(_) -> ok end),
-    peer:pong(PeerPid, FakePeer),
+    peer:pong(PeerPid),
     % since we check that the peer called kbucket:put but doesn't
     % wait an answer
     timer:sleep(10),

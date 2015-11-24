@@ -4,8 +4,8 @@
          peer/3,
          store/2,
          find_value_of/2,
-         pong/2,
-         ping/2,
+         pong/1,
+         ping/1,
          id_of/1]).
 
 start(Id) ->
@@ -23,12 +23,12 @@ find_value_of(Key, PeerPid) ->
         {PeerPid, Value} -> Value
     end.
 
-ping(ToPeerPid, FromPeerPid) ->
-    ToPeerPid ! {ping, FromPeerPid},
+ping(ToPeerPid) ->
+    ToPeerPid ! {ping, self()},
     ok.
 
-pong(ToPeerPid, FromPeerPid) ->
-    ToPeerPid ! {pong, FromPeerPid},
+pong(ToPeerPid) ->
+    ToPeerPid ! {pong, self()},
     ok.
 
 id_of(PeerPid) ->
@@ -48,7 +48,7 @@ peer(Id, Map, KbucketPid) ->
 
         {ping, FromPeer} ->
             kbucket:put(FromPeer),
-            pong(FromPeer, self()),
+            pong(FromPeer),
             peer(Id, Map, KbucketPid);
 
         {pong, FromPeer} ->
