@@ -7,9 +7,7 @@
          id_of/1]).
 
 start(Id) ->
-    spawn(fun() ->
-              peer(Id, #{})
-          end).
+    spawn(fun() -> peer(Id, #{}) end).
 
 store({Key, Value}, PeerPid) ->
     PeerPid ! {store, self(), {Key, Value}},
@@ -21,8 +19,8 @@ find_value_of(Key, PeerPid) ->
         {PeerPid, Value} -> Value
     end.
 
-ping(ToPeerPid, PeerPid) ->
-    PeerPid ! {ping, ToPeerPid},
+ping(ToPeerPid, FromPeerPid) ->
+    ToPeerPid ! {ping, FromPeerPid},
     ok.
 
 id_of(PeerPid) ->
@@ -33,13 +31,14 @@ id_of(PeerPid) ->
     end.
 
 peer(Id, Map) ->
+    %TODO: each of these ops should update the bucket
     receive
         {store, _, {Key, Value}} ->
             NewMap = Map#{Key => Value},
             peer(Id, NewMap);
 
-        {ping, ToPeer} ->
-            ToPeer ! {pong, self()},
+        {ping, FromPeer} ->
+            FromPeer ! {pong, self()},
             peer(Id, Map);
 
         {find_value, FromPeer, Key} ->

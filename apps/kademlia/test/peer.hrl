@@ -34,7 +34,7 @@ should_overwrite_data_with_same_key(PeerPid) ->
     [?_assertEqual(SecondValue, RetrievalData)].
 
 should_answer_with_pong_to_a_ping(PeerPid) ->
-    peer:ping(self(), PeerPid),
+    peer:ping(PeerPid, self()),
     receive
         {pong, PeerPid} ->
             [?pass];
