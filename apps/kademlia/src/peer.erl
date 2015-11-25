@@ -59,8 +59,14 @@ peer(Id, Map, KbucketPid) ->
 
         {find_value, FromPeer, Key} ->
             kbucket:put(KbucketPid, FromPeer),
-            #{Key := Value} = Map,
-            FromPeer ! {self(), Value},
+            case maps:is_key(Key, Map) of
+                true ->
+                    #{Key := Value} = Map,
+                    FromPeer ! {self(), Value};
+                false ->
+                    ClosestPeers = kbucket:closest_peers(KbucketPid, Key),
+                    FromPeer ! {self(), ClosestPeers}
+            end,
             peer(Id, Map, KbucketPid);
 
         {find_closest_peers, FromPeer, Key} ->

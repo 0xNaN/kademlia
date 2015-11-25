@@ -16,7 +16,7 @@ start() ->
     {PeerPid, KbucketPid}.
 
 teardown({_, _}) ->
-    meck:validate(kbucket),
+    ?assert(meck:validate(kbucket)),
     meck:unload(kbucket).
 
 peer_suite_test_() ->
@@ -25,6 +25,7 @@ peer_suite_test_() ->
      ?setup(fun should_answer_with_pong_to_a_ping/1),
      ?setup(fun should_update_kbucket_if_receive_a_pong/1),
      ?setup(fun should_contact_the_kbucket_for_its_closest_peer_to_a_key/1),
+     ?setup(fun should_returns_its_closest_peers_when_no_key_is_found/1),
      ?setup(fun should_return_its_id/1)].
 
 should_store_data({PeerPid, KbucketPid}) ->
@@ -83,6 +84,19 @@ should_contact_the_kbucket_for_its_closest_peer_to_a_key({PeerPid, KbucketPid}) 
                     [?_assertEqual([1, 2], Peers),
                      ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer])),
                      ?_assert(meck:called(kbucket, closest_peers, [KbucketPid, KeyToSearch]))]).
+
+should_returns_its_closest_peers_when_no_key_is_found({PeerPid, KbucketPid})->
+    FakePeer = self(),
+    UnknownKey = 2,
+
+    meck:expect(kbucket, closest_peers, ?two_any_args(?return([1, 2]))),
+    meck:expect(kbucket, put, ?two_any_args(?return(ok))),
+    peer:find_value_of(UnknownKey, PeerPid),
+
+    ?receiving({PeerPid, Peers},
+                    [?_assertEqual([1, 2], Peers),
+                     ?_assertEqual(1, meck:num_calls(kbucket, put, [KbucketPid, FakePeer])),
+                     ?_assert(meck:called(kbucket, closest_peers, [KbucketPid, UnknownKey]))]).
 
 should_return_its_id({PeerPid, _}) ->
     Id = peer:id_of(PeerPid),
