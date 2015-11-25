@@ -70,7 +70,11 @@ peer(Id, Map, KbucketPid) ->
 
         {find_closest_peers, FromPeer, Key} ->
             kbucket:put(KbucketPid, FromPeer),
-            FromPeer ! {self(), kbucket:closest_peers(KbucketPid, Key)},
+            ClosestPeers = kbucket:closest_peers(KbucketPid, Key),
+
+            % XXX: could a peer be present multiple times?
+            FilteredClosestPeers = lists:delete(FromPeer, ClosestPeers),
+            FromPeer ! {self(), FilteredClosestPeers},
             peer(Id, Map, KbucketPid);
 
         {id, FromPeer} ->
