@@ -15,6 +15,7 @@ peer_suite_test_() ->
     [?setup(fun should_start_a_kbucket_process/1),
      ?setup(fun should_create_a_bucket_if_not_exists/1),
      ?setup(fun should_append_a_contacts_with_the_same_bucket_index/1),
+     ?setup(fun should_update_an_already_present_contacts/1),
      ?setup(fun should_returns_an_empty_list_for_an_unknown_distance/1)].
 
 should_compute_the_distance_of_two_id_test() ->
@@ -52,3 +53,13 @@ should_append_a_contacts_with_the_same_bucket_index(KbucketPid) ->
     ok = kbucket:put(KbucketPid, AnotherPeerId),
 
     [?_assertEqual([PeerId, AnotherPeerId], kbucket:get(KbucketPid, 1))].
+
+should_update_an_already_present_contacts(KbucketPid) ->
+    PeerId = 2#1111,
+    AnotherPeerId = 2#1110,
+    ok = kbucket:put(KbucketPid, PeerId),
+    ok = kbucket:put(KbucketPid, AnotherPeerId),
+
+    ok = kbucket:put(KbucketPid, PeerId),
+
+    [?_assertEqual([AnotherPeerId, PeerId], kbucket:get(KbucketPid, 1))].

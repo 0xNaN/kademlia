@@ -32,13 +32,17 @@ bucket(BucketIndex, Contacts) ->
         _    -> []
     end.
 
+put_contact(Contact, Bucket) ->
+    CleanedBucket = lists:delete(Contact, Bucket),
+    lists:append(CleanedBucket, [Contact]).
+
 kbucket(OwningPeerId, K, Contacts) ->
     receive
         {put, PeerId} ->
             Distance = distance(OwningPeerId, PeerId),
             BucketIndex = bucket_index(Distance),
             Bucket = bucket(BucketIndex, Contacts),
-            NewBucket = lists:append(Bucket, [PeerId]),
+            NewBucket = put_contact(PeerId, Bucket),
             kbucket(OwningPeerId, K, Contacts#{BucketIndex => NewBucket});
 
         {get, FromPeer, BucketIndex} ->
