@@ -6,6 +6,8 @@
 -export([bucket_index/1]).
 -export([distance/2]).
 
+-type contact() :: {pid(), integer()} .
+
 start(OwningPeerId, K) ->
     spawn(fun() -> kbucket(OwningPeerId, K, #{}) end).
 
@@ -38,11 +40,11 @@ put_contact(Contact, Bucket) ->
 
 kbucket(OwningPeerId, K, Contacts) ->
     receive
-        {put, PeerId} ->
+        {put, {PeerPid, PeerId} = Contact} ->
             Distance = distance(OwningPeerId, PeerId),
             BucketIndex = bucket_index(Distance),
             Bucket = bucket(BucketIndex, Contacts),
-            NewBucket = put_contact(PeerId, Bucket),
+            NewBucket = put_contact(Contact, Bucket),
             kbucket(OwningPeerId, K, Contacts#{BucketIndex => NewBucket});
 
         {get, FromPeer, BucketIndex} ->

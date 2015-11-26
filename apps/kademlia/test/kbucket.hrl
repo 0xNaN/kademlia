@@ -38,28 +38,28 @@ should_start_a_kbucket_process(KbucketPid) ->
     [?_assert(erlang:is_pid(KbucketPid))].
 
 should_create_a_bucket_if_not_exists(KbucketPid) ->
-    PeerId = 2#1111,
-    ok = kbucket:put(KbucketPid, PeerId),
-    [?_assertEqual([PeerId], kbucket:get(KbucketPid, 1))].
+    PeerContact = {self(), 2#1111},
+    ok = kbucket:put(KbucketPid, PeerContact),
+    [?_assertEqual([PeerContact], kbucket:get(KbucketPid, 1))].
 
 should_returns_an_empty_list_for_an_unknown_distance(KbucketPid) ->
     [?_assertEqual([], kbucket:get(KbucketPid, 100))].
 
 should_append_a_contacts_with_the_same_bucket_index(KbucketPid) ->
-    PeerId = 2#1111, % distance of 2 from OwningId
-    AnotherPeerId = 2#1110, %distance of 3 from OwningId
+    PeerContact    = {self(), 2#1111}, % distance of 2 from OwningId
+    AnotherContact = {self(), 2#1110}, %distance of 3 from OwningId
 
-    ok = kbucket:put(KbucketPid, PeerId),
-    ok = kbucket:put(KbucketPid, AnotherPeerId),
+    ok = kbucket:put(KbucketPid, PeerContact),
+    ok = kbucket:put(KbucketPid, AnotherContact),
 
-    [?_assertEqual([PeerId, AnotherPeerId], kbucket:get(KbucketPid, 1))].
+    [?_assertEqual([PeerContact, AnotherContact], kbucket:get(KbucketPid, 1))].
 
 should_update_an_already_present_contacts(KbucketPid) ->
-    PeerId = 2#1111,
-    AnotherPeerId = 2#1110,
-    ok = kbucket:put(KbucketPid, PeerId),
-    ok = kbucket:put(KbucketPid, AnotherPeerId),
+    PeerContact    = {self(), 2#1111},
+    AnotherContact = {self(), 2#1110},
+    ok = kbucket:put(KbucketPid, PeerContact),
+    ok = kbucket:put(KbucketPid, AnotherContact),
 
-    ok = kbucket:put(KbucketPid, PeerId),
+    ok = kbucket:put(KbucketPid, PeerContact),
 
-    [?_assertEqual([AnotherPeerId, PeerId], kbucket:get(KbucketPid, 1))].
+    [?_assertEqual([AnotherContact, PeerContact], kbucket:get(KbucketPid, 1))].
