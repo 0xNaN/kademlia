@@ -30,7 +30,13 @@ kbucket(OwningPeerId, K, Contacts) ->
         {put, PeerId} ->
             Distance = distance(OwningPeerId, PeerId),
             BucketIndex = bucket_index(Distance),
-            kbucket(OwningPeerId, K, Contacts#{BucketIndex => [PeerId]});
+            ResultBucket = case maps:is_key(BucketIndex, Contacts) of
+                        true -> #{BucketIndex := Bucket} = Contacts,
+                                Bucket;
+                        _    -> []
+            end,
+            NewBucket = lists:append(ResultBucket, [PeerId]),
+            kbucket(OwningPeerId, K, Contacts#{BucketIndex => NewBucket});
         {get, FromPeer, Distance} ->
             ResultBucket = case maps:is_key(Distance, Contacts) of
                 true -> #{Distance := Bucket} = Contacts,
