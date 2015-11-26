@@ -21,6 +21,17 @@ should_compute_the_distance_of_two_id_test() ->
     SecondId = 2#0010,
     ?assertEqual(3, kbucket:distance(FirstId, SecondId)).
 
+should_returns_the_correct_bucket_index_of_a_distance_test() ->
+    ?assertEqual(0, kbucket:bucket_index(1)),
+    ?assertEqual(1, kbucket:bucket_index(2)),
+    ?assertEqual(1, kbucket:bucket_index(3)),
+    ?assertEqual(2, kbucket:bucket_index(4)),
+    ?assertEqual(2, kbucket:bucket_index(5)),
+    ?assertEqual(2, kbucket:bucket_index(6)),
+    ?assertEqual(2, kbucket:bucket_index(7)),
+    ?assertEqual(3, kbucket:bucket_index(8)),
+    ?assertEqual(7, kbucket:bucket_index(130)).
+
 should_start_a_kbucket_process(KbucketPid) ->
     [?_assert(erlang:is_pid(KbucketPid))].
 

@@ -3,6 +3,7 @@
 -export([kbucket/3]).
 -export([put/2]).
 -export([get/2]).
+-export([bucket_index/1]).
 -export([distance/2]).
 
 start(OwningPeerId, K) ->
@@ -12,8 +13,7 @@ distance(FromPeerId, ToPeerId) ->
     FromPeerId bxor ToPeerId.
 
 bucket_index(Distance) ->
-    RealIndex = float_to_list(math:log2(Distance), [{decimals, 0}]),
-    list_to_integer(RealIndex).
+    trunc(math:log2(Distance)).
 
 put(KbucketPid, PeerId) ->
     KbucketPid ! {put, PeerId},
