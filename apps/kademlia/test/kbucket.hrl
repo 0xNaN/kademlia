@@ -2,13 +2,15 @@
 -include_lib("test_macro.hrl").
 
 start() ->
+    meck:new(peer),
+    meck:expect(peer, start, ?one_any_arg(?return(self()))),
     OwningId = 2#1101,
     K = 3,
     KbucketPid = kbucket:start(OwningId, K),
     KbucketPid.
 
 teardown(_) ->
-    void.
+    meck:unload(peer).
 
 peer_suite_test_() ->
     [?setup(fun should_start_a_kbucket_process/1),
@@ -16,6 +18,7 @@ peer_suite_test_() ->
      ?setup(fun should_append_a_contacts_with_the_same_bucket_index/1),
      ?setup(fun should_update_an_already_present_contacts/1),
      ?setup(fun ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond/1),
+     ?setup(fun ping_the_least_seen_contact_when_a_bucket_is_full_and_mantain_it_if_respond/1),
      ?setup(fun should_returns_an_empty_list_for_an_unknown_distance/1)].
 
 should_compute_the_distance_of_two_id_test() ->
@@ -65,8 +68,6 @@ should_update_an_already_present_contacts(KbucketPid) ->
     [?_assertEqual([AnotherContact, PeerContact], kbucket:get(KbucketPid, 1))].
 
 ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond(KbucketPid) ->
-    meck:new(peer),
-    meck:expect(peer, start, ?one_any_arg(?return(self()))),
     meck:expect(peer, ping,  ?one_any_arg(?return(ok))),
 
     FourPeerId = 2#1001,
@@ -82,4 +83,22 @@ ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond(K
     ok = kbucket:put(KbucketPid, SevenPeerContact),
 
     [?_assertEqual([FivePeerContact, SixPeerContact, SevenPeerContact],
+                   kbucket:get(KbucketPid, 2))].
+
+ping_the_least_seen_contact_when_a_bucket_is_full_and_mantain_it_if_respond(KbucketPid) ->
+    meck:expect(peer, ping,  fun(PeerToPing) -> self() ! {pong, PeerToPing} end),
+
+    FourPeerId = 2#1001,
+    FourPeerContact  = {peer:start(FourPeerId), FourPeerId},
+    FivePeerContact  = {self(), 2#1000},
+    SixPeerContact   = {self(), 2#1011},
+    SevenPeerContact = {self(), 2#1010},
+
+    ok = kbucket:put(KbucketPid, FourPeerContact),
+    ok = kbucket:put(KbucketPid, FivePeerContact),
+    ok = kbucket:put(KbucketPid,  SixPeerContact),
+
+    ok = kbucket:put(KbucketPid, SevenPeerContact),
+
+    [?_assertEqual([FourPeerContact, FivePeerContact, SixPeerContact],
                    kbucket:get(KbucketPid, 2))].
