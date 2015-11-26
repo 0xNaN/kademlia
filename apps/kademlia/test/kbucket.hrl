@@ -1,12 +1,13 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("test_macro.hrl").
 
+-define(PEER_ID, 2#1101).
+
 start() ->
     meck:new(peer),
     meck:expect(peer, start, ?one_any_arg(?return(self()))),
-    OwningId = 2#1101,
     K = 3,
-    KbucketPid = kbucket:start(OwningId, K),
+    KbucketPid = kbucket:start(?PEER_ID, K),
     KbucketPid.
 
 teardown(_) ->
@@ -22,9 +23,7 @@ peer_suite_test_() ->
      ?setup(fun should_returns_an_empty_list_for_an_unknown_distance/1)].
 
 should_compute_the_distance_of_two_id_test() ->
-    FirstId  = 2#0001,
-    SecondId = 2#0010,
-    ?assertEqual(3, kbucket:distance(FirstId, SecondId)).
+    ?assertEqual(3, kbucket:distance(2#0001, 2#0010)).
 
 should_returns_the_correct_bucket_index_of_a_distance_test() ->
     ?assertEqual(0, kbucket:bucket_index(1)),
@@ -68,10 +67,10 @@ should_update_an_already_present_contacts(KbucketPid) ->
     [?_assertEqual([AnotherContact, PeerContact], kbucket:get(KbucketPid, 1))].
 
 ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond(KbucketPid) ->
-    meck:expect(peer, ping,  ?one_any_arg(?return(ok))),
-
-    FourPeerId = 2#1001,
-    FourPeerContact  = {peer:start(FourPeerId), FourPeerId},
+    % these defines fakes contacts.
+    % the IDs are such that its BucketIndex are the
+    % same if stored in a peer with 2#1101 ID.
+    FourPeerContact  = {peer:start(2#1001), 2#1001},
     FivePeerContact  = {self(), 2#1000},
     SixPeerContact   = {self(), 2#1011},
     SevenPeerContact = {self(), 2#1010},
@@ -80,16 +79,14 @@ ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond(K
     ok = kbucket:put(KbucketPid, FivePeerContact),
     ok = kbucket:put(KbucketPid,  SixPeerContact),
 
+    meck:expect(peer, ping,  ?one_any_arg(?return(ok))),
     ok = kbucket:put(KbucketPid, SevenPeerContact),
 
     [?_assertEqual([FivePeerContact, SixPeerContact, SevenPeerContact],
                    kbucket:get(KbucketPid, 2))].
 
 ping_the_least_seen_contact_when_a_bucket_is_full_and_mantain_it_if_respond(KbucketPid) ->
-    meck:expect(peer, ping,  fun(PeerToPing) -> self() ! {pong, PeerToPing} end),
-
-    FourPeerId = 2#1001,
-    FourPeerContact  = {peer:start(FourPeerId), FourPeerId},
+    FourPeerContact  = {peer:start(2#1001), 2#1001},
     FivePeerContact  = {self(), 2#1000},
     SixPeerContact   = {self(), 2#1011},
     SevenPeerContact = {self(), 2#1010},
@@ -98,6 +95,7 @@ ping_the_least_seen_contact_when_a_bucket_is_full_and_mantain_it_if_respond(Kbuc
     ok = kbucket:put(KbucketPid, FivePeerContact),
     ok = kbucket:put(KbucketPid,  SixPeerContact),
 
+    meck:expect(peer, ping,  fun(PeerToPing) -> self() ! {pong, PeerToPing} end),
     ok = kbucket:put(KbucketPid, SevenPeerContact),
 
     [?_assertEqual([FourPeerContact, FivePeerContact, SixPeerContact],
