@@ -1,6 +1,5 @@
 -include_lib("eunit/include/eunit.hrl").
-
--define(setup(F), {setup, fun start/0, fun teardown/1, F}).
+-include_lib("test_macro.hrl").
 
 start() ->
     OwningId = 2#1101,
@@ -67,8 +66,8 @@ should_update_an_already_present_contacts(KbucketPid) ->
 
 ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond(KbucketPid) ->
     meck:new(peer),
-    meck:expect(peer, start, fun(_) -> self() end),
-    meck:expect(peer, ping, fun(_) -> ok end),
+    meck:expect(peer, start, ?one_any_arg(?return(self()))),
+    meck:expect(peer, ping,  ?one_any_arg(?return(ok))),
 
     FourPeerId = 2#1001,
     FourPeerContact  = {peer:start(FourPeerId), FourPeerId},
