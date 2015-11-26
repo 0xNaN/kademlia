@@ -25,26 +25,26 @@ get(KbucketPid, Distance) ->
         {KbucketPid, Bucket} -> Bucket
     end.
 
+bucket(BucketIndex, Contacts) ->
+    case maps:is_key(BucketIndex, Contacts) of
+        true -> #{BucketIndex := Bucket} = Contacts,
+                Bucket;
+        _    -> []
+    end.
+
 kbucket(OwningPeerId, K, Contacts) ->
     receive
         {put, PeerId} ->
             Distance = distance(OwningPeerId, PeerId),
             BucketIndex = bucket_index(Distance),
-            ResultBucket = case maps:is_key(BucketIndex, Contacts) of
-                        true -> #{BucketIndex := Bucket} = Contacts,
-                                Bucket;
-                        _    -> []
-            end,
-            NewBucket = lists:append(ResultBucket, [PeerId]),
+            Bucket = bucket(BucketIndex, Contacts),
+            NewBucket = lists:append(Bucket, [PeerId]),
             kbucket(OwningPeerId, K, Contacts#{BucketIndex => NewBucket});
-        {get, FromPeer, Distance} ->
-            ResultBucket = case maps:is_key(Distance, Contacts) of
-                true -> #{Distance := Bucket} = Contacts,
-                        Bucket;
-                _    -> []
-            end,
-            FromPeer ! {self(), ResultBucket},
+
+        {get, FromPeer, BucketIndex} ->
+            FromPeer ! {self(), bucket(BucketIndex, Contacts)},
             kbucket(OwningPeerId, K, Contacts);
+
         _ ->
             kbucket(OwningPeerId, K, Contacts)
     end.
