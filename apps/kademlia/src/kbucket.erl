@@ -11,6 +11,10 @@ start(OwningPeerId, K) ->
 distance(FromPeerId, ToPeerId) ->
     FromPeerId bxor ToPeerId.
 
+bucket_index(Distance) ->
+    RealIndex = float_to_list(math:log2(Distance), [{decimals, 0}]),
+    list_to_integer(RealIndex).
+
 put(KbucketPid, PeerId) ->
     KbucketPid ! {put, PeerId},
     ok.
@@ -25,7 +29,7 @@ kbucket(OwningPeerId, K, Contacts) ->
     receive
         {put, PeerId} ->
             Distance = distance(OwningPeerId, PeerId),
-            BucketIndex = list_to_integer(float_to_list(math:log2(Distance), [{decimals, 0}])),
+            BucketIndex = bucket_index(Distance),
             kbucket(OwningPeerId, K, Contacts#{BucketIndex => [PeerId]});
         {get, FromPeer, Distance} ->
             ResultBucket = case maps:is_key(Distance, Contacts) of
