@@ -3,7 +3,7 @@
 -define(setup(F), {setup, fun start/0, fun teardown/1, F}).
 
 start() ->
-    OwningId = 2#0001,
+    OwningId = 2#1101,
     K = 3,
     KbucketPid = kbucket:start(OwningId, K),
     KbucketPid.
@@ -25,9 +25,9 @@ should_start_a_kbucket_process(KbucketPid) ->
     [?_assert(erlang:is_pid(KbucketPid))].
 
 should_create_a_bucket_if_not_exists(KbucketPid) ->
-    PeerId = 2#00011,
+    PeerId = 2#1111,
     ok = kbucket:put(KbucketPid, PeerId),
-    [?_assertEqual([PeerId], kbucket:get(KbucketPid, 2))].
+    [?_assertEqual([PeerId], kbucket:get(KbucketPid, 1))].
 
 should_returns_an_empty_list_for_an_unknown_distance(KbucketPid) ->
     [?_assertEqual([], kbucket:get(KbucketPid, 100))].

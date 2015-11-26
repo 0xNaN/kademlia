@@ -25,7 +25,8 @@ kbucket(OwningPeerId, K, Contacts) ->
     receive
         {put, PeerId} ->
             Distance = distance(OwningPeerId, PeerId),
-            kbucket(OwningPeerId, K, Contacts#{Distance => [PeerId]});
+            BucketIndex = list_to_integer(float_to_list(math:log2(Distance), [{decimals, 0}])),
+            kbucket(OwningPeerId, K, Contacts#{BucketIndex => [PeerId]});
         {get, FromPeer, Distance} ->
             ResultBucket = case maps:is_key(Distance, Contacts) of
                 true -> #{Distance := Bucket} = Contacts,
