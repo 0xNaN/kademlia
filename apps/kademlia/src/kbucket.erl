@@ -37,9 +37,10 @@ bucket(BucketIndex, Contacts) ->
     end.
 
 put_contact(Contact, [LeastContact | PartialBucket] = Bucket , K) when length(Bucket) =:= K ->
-    peer:ping(LeastContact),
+    {PeerPid, _} = LeastContact,
+    peer:ping(PeerPid),
     receive
-        {pong, LeastContact} ->
+        {pong, PeerPid} ->
             Bucket
     after ?TIMEOUT_PONG ->
         put_contact(Contact, PartialBucket, K)
