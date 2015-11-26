@@ -16,6 +16,7 @@ peer_suite_test_() ->
      ?setup(fun should_create_a_bucket_if_not_exists/1),
      ?setup(fun should_append_a_contacts_with_the_same_bucket_index/1),
      ?setup(fun should_update_an_already_present_contacts/1),
+     ?setup(fun ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond/1),
      ?setup(fun should_returns_an_empty_list_for_an_unknown_distance/1)].
 
 should_compute_the_distance_of_two_id_test() ->
@@ -63,3 +64,23 @@ should_update_an_already_present_contacts(KbucketPid) ->
     ok = kbucket:put(KbucketPid, PeerContact),
 
     [?_assertEqual([AnotherContact, PeerContact], kbucket:get(KbucketPid, 1))].
+
+ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond(KbucketPid) ->
+    meck:new(peer),
+    meck:expect(peer, start, fun(_) -> self() end),
+    meck:expect(peer, ping, fun(_) -> ok end),
+
+    FourPeerId = 2#1001,
+    FourPeerContact  = {peer:start(FourPeerId), FourPeerId},
+    FivePeerContact  = {self(), 2#1000},
+    SixPeerContact   = {self(), 2#1011},
+    SevenPeerContact = {self(), 2#1010},
+
+    ok = kbucket:put(KbucketPid, FourPeerContact),
+    ok = kbucket:put(KbucketPid, FivePeerContact),
+    ok = kbucket:put(KbucketPid,  SixPeerContact),
+
+    ok = kbucket:put(KbucketPid, SevenPeerContact),
+
+    [?_assertEqual([FivePeerContact, SixPeerContact, SevenPeerContact],
+                   kbucket:get(KbucketPid, 2))].

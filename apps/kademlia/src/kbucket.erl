@@ -6,6 +6,8 @@
 -export([bucket_index/1]).
 -export([distance/2]).
 
+-define (TIMEOUT_PONG, 100).
+
 -type contact() :: {pid(), integer()} .
 
 start(OwningPeerId, K) ->
@@ -34,7 +36,15 @@ bucket(BucketIndex, Contacts) ->
         _    -> []
     end.
 
-put_contact(Contact, Bucket) ->
+put_contact(Contact, [LeastContact | PartialBucket] = Bucket , K) when length(Bucket) =:= K ->
+    peer:ping(LeastContact),
+    receive
+        {pong, LeastContact} ->
+            Bucket
+    after ?TIMEOUT_PONG ->
+        put_contact(Contact, PartialBucket, K)
+    end;
+put_contact(Contact, Bucket, _) ->
     CleanedBucket = lists:delete(Contact, Bucket),
     lists:append(CleanedBucket, [Contact]).
 
@@ -44,7 +54,7 @@ kbucket(OwningPeerId, K, Contacts) ->
             Distance = distance(OwningPeerId, PeerId),
             BucketIndex = bucket_index(Distance),
             Bucket = bucket(BucketIndex, Contacts),
-            NewBucket = put_contact(Contact, Bucket),
+            NewBucket = put_contact(Contact, Bucket, K),
             kbucket(OwningPeerId, K, Contacts#{BucketIndex => NewBucket});
 
         {get, FromPeer, BucketIndex} ->
