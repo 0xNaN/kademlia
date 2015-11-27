@@ -24,6 +24,12 @@ get(KbucketPid, Distance) ->
         {KbucketPid, Bucket} -> Bucket
     end.
 
+closest_contacts(KbucketPid, Key) ->
+    KbucketPid ! {closest_contacts, self(), Key},
+    receive
+        {KbucketPid, Contacts} -> Contacts
+    end.
+
 loop(Kbucket) ->
     receive
         {put, Contact} ->
@@ -65,12 +71,6 @@ put_on([LeastContact | PartialBucket] = Bucket, Contact, Kbucket)
 put_on(Bucket, Contact, _) ->
     CleanedBucket = lists:delete(Contact, Bucket),
     lists:append(CleanedBucket, [Contact]).
-
-closest_contacts(KbucketPid, Key) ->
-    KbucketPid ! {closest_contacts, self(), Key},
-    receive
-        {KbucketPid, Contacts} -> Contacts
-    end.
 
 bucket(BucketIndex, Kbucket) ->
     Contacts = Kbucket#kbucket.contacts,
