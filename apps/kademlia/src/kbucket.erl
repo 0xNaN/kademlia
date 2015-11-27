@@ -37,9 +37,7 @@ loop(Kbucket) ->
             loop(NewKbucket);
 
         {closest_contacts, FromPeer, Key} ->
-            Distance = distance(Kbucket#kbucket.id, Key),
-            BucketIndex = bucket_index(Distance),
-            ClosestContacts = bucket(BucketIndex, Kbucket),
+            ClosestContacts = handle_closest_contacts(Key, Kbucket),
             FromPeer ! {self(), ClosestContacts},
             loop(Kbucket);
 
@@ -50,6 +48,22 @@ loop(Kbucket) ->
         _ ->
             loop(Kbucket)
     end.
+
+handle_closest_contacts(Key, Kbucket) ->
+    AllContacts = all_contacts(Kbucket),
+    SortedContacts = lists:sort(fun({_, FirstId}, {_, SecondId}) ->
+                                    distance(Key, FirstId) =< distance(Key, SecondId)
+                                end, AllContacts),
+    lists:sublist(SortedContacts, Kbucket#kbucket.k).
+
+all_contacts(Kbucket) ->
+    Contacts = Kbucket#kbucket.contacts,
+    Indexes = maps:keys(Contacts),
+    AllContacts = lists:map(fun(Index) ->
+                                #{Index := BucketContacts} = Contacts,
+                                BucketContacts
+                            end, Indexes),
+    lists:flatten(AllContacts).
 
 handle_put({_, PeerId} = Contact, Kbucket) ->
     BucketIndex = bucket_index(distance(Kbucket#kbucket.id, PeerId)),
