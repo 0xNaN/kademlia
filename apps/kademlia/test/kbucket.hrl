@@ -104,25 +104,25 @@ ping_the_least_seen_contact_when_a_bucket_is_full_and_mantain_it_if_respond(Kbuc
                    kbucket:get(KbucketPid, 2))].
 
 should_returns_up_to_k_contacts_closest_to_a_key(KbucketPid) ->
-    FourPeerContact  = {self(), 2#1001},
-    FivePeerContact  = {self(), 2#1000},
-    SixPeerContact   = {self(), 2#1011},
+    ThreePeerContact  = {self(), 2#1001},
+    TwoPeerContact    = {self(), 2#1000},
+    OnePeerContact    = {self(), 2#1011},
 
-    ok = kbucket:put(KbucketPid, FourPeerContact),
-    ok = kbucket:put(KbucketPid, FivePeerContact),
-    ok = kbucket:put(KbucketPid,  SixPeerContact),
+    ok = kbucket:put(KbucketPid,    OnePeerContact),
+    ok = kbucket:put(KbucketPid,    TwoPeerContact),
+    ok = kbucket:put(KbucketPid,  ThreePeerContact),
 
-    [?_assertEqual([SixPeerContact, FivePeerContact, FourPeerContact],
+    [?_assertEqual([OnePeerContact, TwoPeerContact, ThreePeerContact],
                    kbucket:closest_contacts(KbucketPid, 2#1010))].
 
 should_fill_the_results_with_other_contacts_if_the_closest_bucket_is_not_full(KbucketPid) ->
-    TwoPeerContact   = {self(), 2#1111},
-    FourPeerContact  = {self(), 2#1001},
-    FivePeerContact  = {self(), 2#1000},
+    FivePeerContact   = {self(), 2#1111},
+    ThreePeerContact  = {self(), 2#1001},
+    TwoPeerContact    = {self(), 2#1000},
 
-    ok = kbucket:put(KbucketPid, TwoPeerContact),
-    ok = kbucket:put(KbucketPid, FourPeerContact),
-    ok = kbucket:put(KbucketPid, FivePeerContact),
+    ok = kbucket:put(KbucketPid,   TwoPeerContact),
+    ok = kbucket:put(KbucketPid, ThreePeerContact),
+    ok = kbucket:put(KbucketPid,  FivePeerContact),
 
-    [?_assertEqual([FivePeerContact, FourPeerContact, TwoPeerContact],
+    [?_assertEqual([TwoPeerContact, ThreePeerContact, FivePeerContact],
                    kbucket:closest_contacts(KbucketPid, 2#1010))].
