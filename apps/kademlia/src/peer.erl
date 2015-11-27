@@ -1,18 +1,22 @@
 -module(peer).
 
 -export([start/1, start/2]).
--export([peer/3]).
+-export([loop/1]).
 -export([store/2]).
 -export([find_value_of/2]).
 -export([find_closest_peers/2]).
 -export([pong/1]).
 -export([ping/1]).
--export([id_of/1]).
+
+-record(peer, {id, repository, kbucket}).
 
 start(Id) ->
-    spawn(fun() -> peer(Id, #{}, kbucket:start(Id)) end).
+    KbucketPid = kbucket:start(Id),
+    Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
+    spawn(fun() -> loop(Peer) end).
 start(Id, KbucketPid) ->
-    spawn(fun() -> peer(Id, #{}, KbucketPid) end).
+    Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
+    spawn(fun() -> loop(Peer) end).
 
 store({Key, Value}, PeerPid) ->
     PeerPid ! {store, self(), {Key, Value}},
@@ -34,54 +38,45 @@ pong(ToPeerPid) ->
     ToPeerPid ! {pong, self()},
     ok.
 
-id_of(PeerPid) ->
-    PeerPid ! {id, self()},
-    receive
-        {PeerPid, Id} ->
-            Id
-    end.
-
-peer(Id, Map, KbucketPid) ->
+loop(#peer{kbucket = Kbucket, id = Id, repository = Map} = Peer) ->
     receive
         {store, FromPeer, {Key, Value}} ->
-            kbucket:put(KbucketPid, FromPeer),
+            kbucket:put(Kbucket, FromPeer),
             NewMap = Map#{Key => Value},
-            peer(Id, NewMap, KbucketPid);
-
+            NewPeer = Peer#peer{repository = NewMap},
+            loop(NewPeer);
         {ping, FromPeer} ->
-            kbucket:put(KbucketPid, FromPeer),
+            kbucket:put(Kbucket, FromPeer),
             pong(FromPeer),
-            peer(Id, Map, KbucketPid);
-
+            loop(Peer);
         {pong, FromPeer} ->
-            kbucket:put(KbucketPid, FromPeer),
-            peer(Id, Map, KbucketPid);
-
+            kbucket:put(Kbucket, FromPeer),
+            loop(Peer);
         {find_value, FromPeer, Key} ->
-            case maps:is_key(Key, Map) of
-                false ->
-                    self() ! {find_closest_peers, FromPeer, Key};
-                true ->
-                    kbucket:put(KbucketPid, FromPeer),
-                    #{Key := Value} = Map,
-                    FromPeer ! {self(), Value}
-            end,
-            peer(Id, Map, KbucketPid);
-
+            kbucket:put(Kbucket, FromPeer),
+            ResponseValue = handle_find_value(FromPeer, Key, Map, Kbucket),
+            FromPeer ! {self(), ResponseValue},
+            loop(Peer);
         {find_closest_peers, FromPeer, Key} ->
-            kbucket:put(KbucketPid, FromPeer),
-            ClosestPeers = kbucket:closest_peers(KbucketPid, Key),
-
-            % XXX: could a peer be present multiple times?
-            FilteredClosestPeers = lists:delete(FromPeer, ClosestPeers),
+            kbucket:put(Kbucket, FromPeer),
+            FilteredClosestPeers = handle_find_closest_peers(FromPeer, Kbucket, Key),
             FromPeer ! {self(), FilteredClosestPeers},
-            peer(Id, Map, KbucketPid);
+            loop(Peer);
+        _ ->
+            loop(Peer)
+    end.
 
-        {id, FromPeer} ->
-            FromPeer ! {self(), Id},
-            peer(Id, Map, KbucketPid);
+handle_find_closest_peers(FromPeer, Kbucket, Key) ->
+    ClosestPeers = kbucket:closest_peers(Kbucket, Key),
+    lists:delete(FromPeer, ClosestPeers).
 
-        _ -> peer(Id, Map, KbucketPid)
+handle_find_value(FromPeer, Key, Map, Kbucket) ->
+    case maps:is_key(Key, Map) of
+        true ->
+            #{Key := Value} = Map,
+            Value;
+        false ->
+            handle_find_closest_peers(FromPeer, Kbucket, Key)
     end.
 
 -ifdef(TEST).

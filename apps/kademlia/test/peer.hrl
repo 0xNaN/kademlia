@@ -19,8 +19,7 @@ peer_suite_test_() ->
      ?setup(fun should_update_kbucket_if_receive_a_pong/1),
      ?setup(fun should_contact_the_kbucket_for_its_closest_peer_to_a_key/1),
      ?setup(fun should_returns_its_closest_peers_when_no_key_is_found/1),
-     ?setup(fun should_not_returns_the_contact_of_the_caller/1),
-     ?setup(fun should_return_its_id/1)].
+     ?setup(fun should_not_returns_the_contact_of_the_caller/1)].
 
 should_store_data({PeerPid, KbucketPid}) ->
     FakePeer = self(),
@@ -100,7 +99,3 @@ should_not_returns_the_contact_of_the_caller({PeerPid, _}) ->
     meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:find_closest_peers(KeyToSearch, PeerPid),
     ?receiving({PeerPid, Peers}, [?_assertEqual([2], Peers)]).
-
-should_return_its_id({PeerPid, _}) ->
-    Id = peer:id_of(PeerPid),
-    [?_assertEqual(1, Id)].
