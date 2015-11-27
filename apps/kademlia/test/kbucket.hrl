@@ -20,7 +20,8 @@ peer_suite_test_() ->
      ?setup(fun should_update_an_already_present_contacts/1),
      ?setup(fun ping_the_least_seen_contact_when_a_bucket_is_full_and_remove_if_doesnt_respond/1),
      ?setup(fun ping_the_least_seen_contact_when_a_bucket_is_full_and_mantain_it_if_respond/1),
-     ?setup(fun should_returns_an_empty_list_for_an_unknown_distance/1)].
+     ?setup(fun should_returns_an_empty_list_for_an_unknown_distance/1),
+     ?setup(fun should_returns_up_to_k_contacts_closest_to_a_key/1)].
 
 should_compute_the_distance_of_two_id_test() ->
     ?assertEqual(3, kbucket:distance(2#0001, 2#0010)).
@@ -100,3 +101,16 @@ ping_the_least_seen_contact_when_a_bucket_is_full_and_mantain_it_if_respond(Kbuc
 
     [?_assertEqual([FourPeerContact, FivePeerContact, SixPeerContact],
                    kbucket:get(KbucketPid, 2))].
+
+should_returns_up_to_k_contacts_closest_to_a_key(KbucketPid) ->
+    FourPeerContact  = {peer:start(2#1001), 2#1001},
+    FivePeerContact  = {self(), 2#1000},
+    SixPeerContact   = {self(), 2#1011},
+
+    ok = kbucket:put(KbucketPid, FourPeerContact),
+    ok = kbucket:put(KbucketPid, FivePeerContact),
+    ok = kbucket:put(KbucketPid,  SixPeerContact),
+
+    [?_assertEqual([FourPeerContact, FivePeerContact, SixPeerContact],
+                   kbucket:closest_contacts(KbucketPid, 2#1010))].
+

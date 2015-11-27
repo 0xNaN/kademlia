@@ -2,9 +2,7 @@
 -export([start/2]).
 -export([kbucket/3]).
 -export([put/2]).
--export([get/2]).
--export([bucket_index/1]).
--export([distance/2]).
+-export([closest_contacts/2]).
 
 -define (TIMEOUT_PONG, 100).
 
@@ -27,6 +25,12 @@ get(KbucketPid, Distance) ->
     KbucketPid ! {get, self(), Distance},
     receive
         {KbucketPid, Bucket} -> Bucket
+    end.
+
+closest_contacts(KbucketPid, Key) ->
+    KbucketPid ! {closest_contacts, self(), Key},
+    receive
+        {KbucketPid, Contacts} -> Contacts
     end.
 
 bucket(BucketIndex, Contacts) ->
@@ -58,6 +62,12 @@ kbucket(OwningPeerId, K, Contacts) ->
             NewBucket = put_contact(Contact, Bucket, K),
             kbucket(OwningPeerId, K, Contacts#{BucketIndex => NewBucket});
 
+        {closest_contacts, FromPeer, Key} ->
+            Distance = distance(OwningPeerId, Key),
+            BucketIndex = bucket_index(Distance),
+            FromPeer ! {self(), bucket(BucketIndex, Contacts)},
+            kbucket(OwningPeerId, K, Contacts);
+
         {get, FromPeer, BucketIndex} ->
             FromPeer ! {self(), bucket(BucketIndex, Contacts)},
             kbucket(OwningPeerId, K, Contacts);
@@ -67,5 +77,6 @@ kbucket(OwningPeerId, K, Contacts) ->
     end.
 
 -ifdef(TEST).
+-compile([export_all]).
 -include_lib("../test/kbucket.hrl").
 -endif.
