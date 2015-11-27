@@ -35,16 +35,13 @@ loop(Kbucket) ->
         {put, Contact} ->
             NewKbucket = handle_put(Contact, Kbucket),
             loop(NewKbucket);
-
         {closest_contacts, FromPeer, Key} ->
             ClosestContacts = handle_closest_contacts(Key, Kbucket),
             FromPeer ! {self(), ClosestContacts},
             loop(Kbucket);
-
-        {get, FromPeer, BucketIndex} ->
+    {get, FromPeer, BucketIndex} ->
             FromPeer ! {self(), bucket(BucketIndex, Kbucket)},
             loop(Kbucket);
-
         _ ->
             loop(Kbucket)
     end.
@@ -53,29 +50,26 @@ handle_closest_contacts(Key, Kbucket) ->
     SortedContacts = sort_on(Key, all_contacts(Kbucket)),
     lists:sublist(SortedContacts, Kbucket#kbucket.k).
 
-handle_put({_, PeerId} = Contact, Kbucket) ->
-    BucketIndex = bucket_index(distance(Kbucket#kbucket.id, PeerId)),
+handle_put({_, PeerId} = Contact, #kbucket{contacts = Contacts, id = Id} = Kbucket) ->
+    BucketIndex = bucket_index(distance(Id, PeerId)),
     Bucket = bucket(BucketIndex, Kbucket),
-    Contacts = Kbucket#kbucket.contacts,
     NewContacts = Contacts#{BucketIndex => put_on(Bucket, Contact, Kbucket)},
     Kbucket#kbucket{contacts=NewContacts}.
 
-put_on([LeastContact | PartialBucket] = Bucket, Contact, Kbucket)
-  when length(Bucket) =:= Kbucket#kbucket.k ->
+put_on([LeastContact | PartialBucket] = Bucket, Contact, #kbucket{k = K}) when length(Bucket) =:= K ->
     {PeerPid, _} = LeastContact,
     peer:ping(PeerPid),
     receive
         {pong, PeerPid} ->
             Bucket
     after ?TIMEOUT_PONG ->
-        put_on(PartialBucket, Contact, Kbucket)
+        put_on(PartialBucket, Contact, K)
     end;
 put_on(Bucket, Contact, _) ->
     CleanedBucket = lists:delete(Contact, Bucket),
     lists:append(CleanedBucket, [Contact]).
 
-bucket(BucketIndex, Kbucket) ->
-    Contacts = Kbucket#kbucket.contacts,
+bucket(BucketIndex, #kbucket{contacts = Contacts}) ->
     case maps:is_key(BucketIndex, Contacts) of
         true -> #{BucketIndex := Bucket} = Contacts,
                 Bucket;
