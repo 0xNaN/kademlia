@@ -1,6 +1,6 @@
 -module(kbucket).
 -export([start/2]).
--export([kbucket/3]).
+-export([loop/1]).
 -export([put/2]).
 -export([closest_contacts/2]).
 
@@ -8,14 +8,11 @@
 
 -type contact() :: {pid(), integer()} .
 
+-record(kbucket, {id, k, contacts}).
+
 start(OwningPeerId, K) ->
-    spawn(fun() -> kbucket(OwningPeerId, K, #{}) end).
-
-distance(FromPeerId, ToPeerId) ->
-    FromPeerId bxor ToPeerId.
-
-bucket_index(Distance) ->
-    trunc(math:log2(Distance)).
+    Kbucket = #kbucket{id=OwningPeerId, k=K, contacts=#{}},
+    spawn(fun() -> loop(Kbucket) end).
 
 put(KbucketPid, PeerId) ->
     KbucketPid ! {put, PeerId},
@@ -27,54 +24,67 @@ get(KbucketPid, Distance) ->
         {KbucketPid, Bucket} -> Bucket
     end.
 
-closest_contacts(KbucketPid, Key) ->
-    KbucketPid ! {closest_contacts, self(), Key},
+loop(Kbucket) ->
     receive
-        {KbucketPid, Contacts} -> Contacts
+        {put, Contact} ->
+            NewKbucket = handle_put(Contact, Kbucket),
+            loop(NewKbucket);
+
+        {closest_contacts, FromPeer, Key} ->
+            Distance = distance(Kbucket#kbucket.id, Key),
+            BucketIndex = bucket_index(Distance),
+            ClosestContacts = bucket(BucketIndex, Kbucket),
+            FromPeer ! {self(), ClosestContacts},
+            loop(Kbucket);
+
+        {get, FromPeer, BucketIndex} ->
+            FromPeer ! {self(), bucket(BucketIndex, Kbucket)},
+            loop(Kbucket);
+
+        _ ->
+            loop(Kbucket)
     end.
 
-bucket(BucketIndex, Contacts) ->
-    case maps:is_key(BucketIndex, Contacts) of
-        true -> #{BucketIndex := Bucket} = Contacts,
-                Bucket;
-        _    -> []
-    end.
+handle_put({_, PeerId} = Contact, Kbucket) ->
+    BucketIndex = bucket_index(distance(Kbucket#kbucket.id, PeerId)),
+    Bucket = bucket(BucketIndex, Kbucket),
+    Contacts = Kbucket#kbucket.contacts,
+    NewContacts = Contacts#{BucketIndex => put_on(Bucket, Contact, Kbucket)},
+    Kbucket#kbucket{contacts=NewContacts}.
 
-put_contact(Contact, [LeastContact | PartialBucket] = Bucket , K) when length(Bucket) =:= K ->
+put_on([LeastContact | PartialBucket] = Bucket, Contact, Kbucket)
+  when length(Bucket) =:= Kbucket#kbucket.k ->
     {PeerPid, _} = LeastContact,
     peer:ping(PeerPid),
     receive
         {pong, PeerPid} ->
             Bucket
     after ?TIMEOUT_PONG ->
-        put_contact(Contact, PartialBucket, K)
+        put_on(PartialBucket, Contact, Kbucket)
     end;
-put_contact(Contact, Bucket, _) ->
+put_on(Bucket, Contact, _) ->
     CleanedBucket = lists:delete(Contact, Bucket),
     lists:append(CleanedBucket, [Contact]).
 
-kbucket(OwningPeerId, K, Contacts) ->
+closest_contacts(KbucketPid, Key) ->
+    KbucketPid ! {closest_contacts, self(), Key},
     receive
-        {put, {PeerPid, PeerId} = Contact} ->
-            Distance = distance(OwningPeerId, PeerId),
-            BucketIndex = bucket_index(Distance),
-            Bucket = bucket(BucketIndex, Contacts),
-            NewBucket = put_contact(Contact, Bucket, K),
-            kbucket(OwningPeerId, K, Contacts#{BucketIndex => NewBucket});
-
-        {closest_contacts, FromPeer, Key} ->
-            Distance = distance(OwningPeerId, Key),
-            BucketIndex = bucket_index(Distance),
-            FromPeer ! {self(), bucket(BucketIndex, Contacts)},
-            kbucket(OwningPeerId, K, Contacts);
-
-        {get, FromPeer, BucketIndex} ->
-            FromPeer ! {self(), bucket(BucketIndex, Contacts)},
-            kbucket(OwningPeerId, K, Contacts);
-
-        _ ->
-            kbucket(OwningPeerId, K, Contacts)
+        {KbucketPid, Contacts} -> Contacts
     end.
+
+bucket(BucketIndex, Kbucket) ->
+    Contacts = Kbucket#kbucket.contacts,
+    case maps:is_key(BucketIndex, Contacts) of
+        true -> #{BucketIndex := Bucket} = Contacts,
+                Bucket;
+        _    -> []
+    end.
+
+distance(FromPeerId, ToPeerId) ->
+    FromPeerId bxor ToPeerId.
+
+bucket_index(Distance) ->
+    trunc(math:log2(Distance)).
 
 -ifdef(TEST).
 -compile([export_all]).

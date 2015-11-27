@@ -103,7 +103,7 @@ ping_the_least_seen_contact_when_a_bucket_is_full_and_mantain_it_if_respond(Kbuc
                    kbucket:get(KbucketPid, 2))].
 
 should_returns_up_to_k_contacts_closest_to_a_key(KbucketPid) ->
-    FourPeerContact  = {peer:start(2#1001), 2#1001},
+    FourPeerContact  = {self(), 2#1001},
     FivePeerContact  = {self(), 2#1000},
     SixPeerContact   = {self(), 2#1011},
 
@@ -113,4 +113,3 @@ should_returns_up_to_k_contacts_closest_to_a_key(KbucketPid) ->
 
     [?_assertEqual([FourPeerContact, FivePeerContact, SixPeerContact],
                    kbucket:closest_contacts(KbucketPid, 2#1010))].
-
