@@ -54,7 +54,7 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             loop(Peer);
         {find_value, FromPeer, Key} ->
             kbucket:put(Kbucket, FromPeer),
-            ResponseValue = handle_find_value(FromPeer, Key, Repository, Kbucket),
+            ResponseValue = handle_find_value(FromPeer, Key, Peer),
             FromPeer ! {self(), ResponseValue},
             loop(Peer);
         {find_closest_peers, FromPeer, Key} ->
@@ -70,7 +70,7 @@ handle_find_closest_peers(FromPeer, Kbucket, Key) ->
     ClosestPeers = kbucket:closest_peers(Kbucket, Key),
     lists:delete(FromPeer, ClosestPeers).
 
-handle_find_value(FromPeer, Key, Repository, Kbucket) ->
+handle_find_value(FromPeer, Key, #peer{repository = Repository, kbucket = Kbucket}) ->
     case maps:is_key(Key, Repository) of
         true ->
             #{Key := Value} = Repository,
