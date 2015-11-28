@@ -1,6 +1,6 @@
 -module(peer).
 
--export([start/1, start/2]).
+-export([start/2]).
 -export([loop/1]).
 -export([store/2]).
 -export([find_value_of/2]).
@@ -10,11 +10,12 @@
 
 -record(peer, {id, repository, kbucket}).
 
-start(Id) ->
-    KbucketPid = kbucket:start(Id),
+
+start(Id, KbucketPid) when is_pid(KbucketPid) ->
     Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
-    spawn(fun() -> loop(Peer) end).
-start(Id, KbucketPid) ->
+    spawn(fun() -> loop(Peer) end);
+start(Id, K) ->
+    KbucketPid = kbucket:start(Id, K),
     Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
     spawn(fun() -> loop(Peer) end).
 
