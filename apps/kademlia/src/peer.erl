@@ -38,12 +38,12 @@ pong(ToPeerPid) ->
     ToPeerPid ! {pong, self()},
     ok.
 
-loop(#peer{kbucket = Kbucket, id = Id, repository = Map} = Peer) ->
+loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
     receive
         {store, FromPeer, {Key, Value}} ->
             kbucket:put(Kbucket, FromPeer),
-            NewMap = Map#{Key => Value},
-            NewPeer = Peer#peer{repository = NewMap},
+            NewRepository = Repository#{Key => Value},
+            NewPeer = Peer#peer{repository = NewRepository},
             loop(NewPeer);
         {ping, FromPeer} ->
             kbucket:put(Kbucket, FromPeer),
@@ -54,7 +54,7 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Map} = Peer) ->
             loop(Peer);
         {find_value, FromPeer, Key} ->
             kbucket:put(Kbucket, FromPeer),
-            ResponseValue = handle_find_value(FromPeer, Key, Map, Kbucket),
+            ResponseValue = handle_find_value(FromPeer, Key, Repository, Kbucket),
             FromPeer ! {self(), ResponseValue},
             loop(Peer);
         {find_closest_peers, FromPeer, Key} ->
@@ -70,10 +70,10 @@ handle_find_closest_peers(FromPeer, Kbucket, Key) ->
     ClosestPeers = kbucket:closest_peers(Kbucket, Key),
     lists:delete(FromPeer, ClosestPeers).
 
-handle_find_value(FromPeer, Key, Map, Kbucket) ->
-    case maps:is_key(Key, Map) of
+handle_find_value(FromPeer, Key, Repository, Kbucket) ->
+    case maps:is_key(Key, Repository) of
         true ->
-            #{Key := Value} = Map,
+            #{Key := Value} = Repository,
             Value;
         false ->
             handle_find_closest_peers(FromPeer, Kbucket, Key)
