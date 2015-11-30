@@ -2,11 +2,11 @@
 
 -export([start/2]).
 -export([loop/1]).
--export([store/2]).
--export([find_value_of/2]).
--export([find_closest_peers/2]).
--export([pong/1]).
--export([ping/1]).
+-export([store/3]).
+-export([find_value_of/3]).
+-export([find_closest_peers/3]).
+-export([pong/2]).
+-export([ping/2]).
 
 -record(peer, {id, repository, kbucket}).
 
@@ -19,24 +19,24 @@ start(Id, K) ->
     Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
     spawn(fun() -> loop(Peer) end).
 
-store({Key, Value}, PeerPid) ->
-    PeerPid ! {store, self(), {Key, Value}},
+store(PeerPid, {Key, Value}, FromPeerPid) ->
+    PeerPid ! {store, FromPeerPid, {Key, Value}},
     ok.
 
-find_value_of(Key, PeerPid) ->
-    PeerPid ! {find_value, self(), Key},
+find_value_of(PeerPid, Key, FromPeerPid) ->
+    PeerPid ! {find_value, FromPeerPid, Key},
     ok.
 
-find_closest_peers(Key, PeerPid) ->
-    PeerPid ! {find_closest_peers, self(), Key},
+find_closest_peers(PeerPid, Key, FromPeerPid) ->
+    PeerPid ! {find_closest_peers, FromPeerPid, Key},
     ok.
 
-ping(ToPeerPid) ->
-    ToPeerPid ! {ping, self()},
+ping(PeerPid, FromPeerPid) ->
+    PeerPid ! {ping, FromPeerPid},
     ok.
 
-pong(ToPeerPid) ->
-    ToPeerPid ! {pong, self()},
+pong(PeerPid, FromPeerPid) ->
+    PeerPid ! {pong, FromPeerPid},
     ok.
 
 loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
@@ -48,7 +48,7 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             loop(NewPeer);
         {ping, FromPeer} ->
             kbucket:put(Kbucket, FromPeer),
-            pong(FromPeer),
+            pong(FromPeer, self()),
             loop(Peer);
         {pong, FromPeer} ->
             kbucket:put(Kbucket, FromPeer),
