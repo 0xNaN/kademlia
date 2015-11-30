@@ -13,71 +13,74 @@
 
 start(Id, KbucketPid) when is_pid(KbucketPid) ->
     Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
-    spawn(fun() -> loop(Peer) end);
+    PeerPid = spawn(fun() -> loop(Peer) end),
+    {PeerPid, Id};
 start(Id, K) ->
     KbucketPid = kbucket:start(Id, K),
     Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
-    spawn(fun() -> loop(Peer) end).
+    PeerPid = spawn(fun() -> loop(Peer) end),
+    {PeerPid, Id}.
 
-store(PeerPid, {Key, Value}, FromPeerPid) ->
-    PeerPid ! {store, FromPeerPid, {Key, Value}},
+store({PeerPid, _}, {Key, Value}, FromPeer) ->
+    PeerPid ! {store, FromPeer, {Key, Value}},
     ok.
 
-find_value_of(PeerPid, Key, FromPeerPid) ->
-    PeerPid ! {find_value, FromPeerPid, Key},
+find_value_of({PeerPid, _}, Key, FromPeer) ->
+    PeerPid ! {find_value, FromPeer, Key},
     ok.
 
-find_closest_peers(PeerPid, Key, FromPeerPid) ->
-    PeerPid ! {find_closest_peers, FromPeerPid, Key},
+find_closest_peers({PeerPid, _}, Key, FromPeer) ->
+    PeerPid ! {find_closest_peers, FromPeer, Key},
     ok.
 
-ping(PeerPid, FromPeerPid) ->
-    PeerPid ! {ping, FromPeerPid},
+ping({PeerPid, _}, FromPeer) ->
+    PeerPid ! {ping, FromPeer},
     ok.
 
-pong(PeerPid, FromPeerPid) ->
-    PeerPid ! {pong, FromPeerPid},
+pong({PeerPid, _}, FromPeer) ->
+    PeerPid ! {pong, FromPeer},
     ok.
 
 loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
+    MyContact = {self(), Id},
     receive
-        {store, FromPeer, {Key, Value}} ->
-            kbucket:put(Kbucket, FromPeer),
+        {store, FromContact, {Key, Value}} ->
+            kbucket:put(Kbucket, FromContact),
             NewRepository = Repository#{Key => Value},
             NewPeer = Peer#peer{repository = NewRepository},
             loop(NewPeer);
-        {ping, FromPeer} ->
-            kbucket:put(Kbucket, FromPeer),
-            pong(FromPeer, self()),
+        {ping, FromContact} ->
+            kbucket:put(Kbucket, FromContact),
+            pong(FromContact, MyContact),
             loop(Peer);
-        {pong, FromPeer} ->
-            kbucket:put(Kbucket, FromPeer),
+        {pong, FromContact} ->
+            kbucket:put(Kbucket, FromContact),
             loop(Peer);
-        {find_value, FromPeer, Key} ->
-            kbucket:put(Kbucket, FromPeer),
-            ResponseValue = handle_find_value(FromPeer, Key, Peer),
-            FromPeer ! {self(), ResponseValue},
+        {find_value, {FromPid, _} = FromContact, Key} ->
+            kbucket:put(Kbucket, FromContact),
+            ResponseValue = handle_find_value(FromContact, Key, Peer),
+            FromPid ! {self(), ResponseValue},
             loop(Peer);
-        {find_closest_peers, FromPeer, Key} ->
-            kbucket:put(Kbucket, FromPeer),
-            FilteredClosestPeers = handle_find_closest_peers(FromPeer, Kbucket, Key),
-            FromPeer ! {self(), FilteredClosestPeers},
+        {find_closest_peers, {FromPid, _} = FromContact, Key} ->
+            kbucket:put(Kbucket, FromContact),
+            FilteredClosestPeers = handle_find_closest_peers(FromContact, Kbucket, Key),
+            FromPid ! {self(), FilteredClosestPeers},
             loop(Peer);
         _ ->
             loop(Peer)
     end.
 
-handle_find_closest_peers(FromPeer, Kbucket, Key) ->
+handle_find_closest_peers(FromContact, Kbucket, Key) ->
     ClosestPeers = kbucket:closest_peers(Kbucket, Key),
-    lists:delete(FromPeer, ClosestPeers).
+    lists:delete(FromContact, ClosestPeers).
 
-handle_find_value(FromPeer, Key, #peer{repository = Repository, kbucket = Kbucket}) ->
+handle_find_value(FromContact, Key, #peer{repository = Repository, kbucket = Kbucket}) ->
     case maps:is_key(Key, Repository) of
         true ->
             #{Key := Value} = Repository,
             Value;
         false ->
-            handle_find_closest_peers(FromPeer, Kbucket, Key)
+            handle_find_closest_peers(FromContact, Kbucket, Key)
     end.
 
 -ifdef(TEST).
