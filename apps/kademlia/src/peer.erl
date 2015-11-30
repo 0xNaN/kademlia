@@ -71,7 +71,7 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
     end.
 
 handle_find_closest_peers(FromContact, Kbucket, Key) ->
-    ClosestPeers = kbucket:closest_peers(Kbucket, Key),
+    ClosestPeers = kbucket:closest_contacts(Kbucket, Key),
     lists:delete(FromContact, ClosestPeers).
 
 handle_find_value(FromContact, Key, #peer{repository = Repository, kbucket = Kbucket}) ->

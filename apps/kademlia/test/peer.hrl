@@ -71,32 +71,32 @@ should_contact_the_kbucket_for_its_closest_peer_to_a_key({{PeerPid, _Id} = Peer,
     FakePeer = ?FAKE_PEER,
     KeyToSearch = 2,
 
-    meck:expect(kbucket, closest_peers, ?two_any_args(?return([1, 2]))),
+    meck:expect(kbucket, closest_contacts, ?two_any_args(?return([1, 2]))),
     meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:find_closest_peers(Peer, KeyToSearch, FakePeer),
 
     ?receiving({PeerPid, Peers},
                     [?_assertEqual([1, 2], Peers),
                      ?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer])),
-                     ?_assert(meck:called(kbucket, closest_peers, [KbucketPid, KeyToSearch]))]).
+                     ?_assert(meck:called(kbucket, closest_contacts, [KbucketPid, KeyToSearch]))]).
 
 should_returns_its_closest_peers_when_no_key_is_found({{PeerPid, _Id} = Peer, KbucketPid})->
     FakePeer = ?FAKE_PEER,
     UnknownKey = 2,
 
-    meck:expect(kbucket, closest_peers, ?two_any_args(?return([1, 2]))),
+    meck:expect(kbucket, closest_contacts, ?two_any_args(?return([1, 2]))),
     meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:find_value_of(Peer, UnknownKey, FakePeer),
     ?receiving({PeerPid, Peers},
                     [?_assertEqual([1, 2], Peers),
                      ?_assertEqual(1, meck:num_calls(kbucket, put, [KbucketPid, FakePeer])),
-                     ?_assert(meck:called(kbucket, closest_peers, [KbucketPid, UnknownKey]))]).
+                     ?_assert(meck:called(kbucket, closest_contacts, [KbucketPid, UnknownKey]))]).
 
 should_not_returns_the_contact_of_the_caller({{PeerPid, _Id} = Peer, _}) ->
     FakePeer = ?FAKE_PEER,
     KeyToSearch = 1,
 
-    meck:expect(kbucket, closest_peers, ?two_any_args(?return([2, FakePeer]))),
+    meck:expect(kbucket, closest_contacts, ?two_any_args(?return([2, FakePeer]))),
     meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:find_closest_peers(Peer, KeyToSearch, FakePeer),
     ?receiving({PeerPid, Peers}, [?_assertEqual([2], Peers)]).
