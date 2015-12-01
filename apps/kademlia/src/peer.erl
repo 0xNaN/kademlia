@@ -14,10 +14,12 @@ start(Id, KbucketPid) when is_pid(KbucketPid) ->
     PeerPid = spawn(fun() -> loop(Peer) end),
     {PeerPid, Id};
 start(Id, K) ->
-    KbucketPid = kbucket:start(Id, K),
+    KbucketPid = kbucket:start(K),
     Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
     PeerPid = spawn(fun() -> loop(Peer) end),
-    {PeerPid, Id}.
+    PeerContact = {PeerPid, Id},
+    KbucketPid ! {set_peer, PeerContact},
+    PeerContact.
 
 check_link({PeerPid, _} = Peer, WithPeer) ->
     PeerPid ! {check_link, self(), WithPeer},
@@ -74,7 +76,7 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             FromPid ! {self(), FilteredClosestPeers},
             loop(Peer);
         {check_link, From, ToContact} ->
-            peer:ping(ToContact, MyContact),
+            ping(ToContact, MyContact),
             receive
                 {pong, ToContact} ->
                     handle_pong(Kbucket, ToContact),
