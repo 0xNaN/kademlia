@@ -2,12 +2,7 @@
 
 -export([start/2]).
 -export([loop/1]).
--export([store/3]).
--export([find_value_of/3]).
--export([find_closest_peers/3]).
--export([pong/2]).
 -export([check_link/2]).
--export([ping/2]).
 
 -define (TIMEOUT_PONG, 100).
 
@@ -23,6 +18,15 @@ start(Id, K) ->
     Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
     PeerPid = spawn(fun() -> loop(Peer) end),
     {PeerPid, Id}.
+
+check_link({PeerPid, _} = Peer, WithPeer) ->
+    PeerPid ! {check_link, self(), WithPeer},
+    receive
+        {Peer, ok} ->
+            ok;
+        {Peer, ko} ->
+            ko
+    end.
 
 store({PeerPid, _}, {Key, Value}, FromPeer) ->
     PeerPid ! {store, FromPeer, {Key, Value}},
@@ -43,15 +47,6 @@ ping({PeerPid, _}, FromPeer) ->
 pong({PeerPid, _}, FromPeer) ->
     PeerPid ! {pong, FromPeer},
     ok.
-
-check_link({PeerPid, _} = Peer, WithPeer) ->
-    PeerPid ! {check_link, self(), WithPeer},
-    receive
-        {Peer, ok} ->
-            ok;
-        {Peer, ko} ->
-            ko
-    end.
 
 loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
     MyContact = {self(), Id},
@@ -109,5 +104,6 @@ handle_find_value(FromContact, Key, #peer{repository = Repository, kbucket = Kbu
     end.
 
 -ifdef(TEST).
+-compile([export_all]).
 -include_lib("../test/peer.hrl").
 -endif.
