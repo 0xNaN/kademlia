@@ -1,17 +1,16 @@
 -module(kbucket).
--export([start/2]).
+-export([start/1]).
 -export([loop/1]).
 -export([put/2]).
+-export([set_peer/2]).
 -export([closest_contacts/2]).
-
--define (TIMEOUT_PONG, 100).
 
 -type contact() :: {pid(), integer()} .
 
--record(kbucket, {id, k, contacts}).
+-record(kbucket, {peer, k, contacts}).
 
-start(OwningPeerId, K) ->
-    Kbucket = #kbucket{id=OwningPeerId, k=K, contacts=#{}},
+start(K) ->
+    Kbucket = #kbucket{k=K, contacts=#{}},
     spawn(fun() -> loop(Kbucket) end).
 
 put(KbucketPid, PeerId) ->
@@ -23,6 +22,10 @@ get(KbucketPid, Distance) ->
     receive
         {KbucketPid, Bucket} -> Bucket
     end.
+
+set_peer(KbucketPid, PeerContact) ->
+    KbucketPid ! {set_peer, PeerContact},
+    ok.
 
 closest_contacts(KbucketPid, Key) ->
     KbucketPid ! {closest_contacts, self(), Key},
@@ -39,9 +42,12 @@ loop(Kbucket) ->
             ClosestContacts = handle_closest_contacts(Key, Kbucket),
             FromPeer ! {self(), ClosestContacts},
             loop(Kbucket);
-    {get, FromPeer, BucketIndex} ->
+        {get, FromPeer, BucketIndex} ->
             FromPeer ! {self(), bucket(BucketIndex, Kbucket)},
             loop(Kbucket);
+        {set_peer, PeerContact} ->
+            NewKbucket = Kbucket#kbucket{peer = PeerContact},
+            loop(NewKbucket);
         _ ->
             loop(Kbucket)
     end.
@@ -50,20 +56,16 @@ handle_closest_contacts(Key, Kbucket) ->
     SortedContacts = sort_on(Key, all_contacts(Kbucket)),
     lists:sublist(SortedContacts, Kbucket#kbucket.k).
 
-handle_put({_, PeerId} = Contact, #kbucket{contacts = Contacts, id = Id} = Kbucket) ->
+handle_put({_, PeerId} = Contact, #kbucket{contacts = Contacts, peer = {_, Id}} = Kbucket) ->
     BucketIndex = bucket_index(distance(Id, PeerId)),
     Bucket = bucket(BucketIndex, Kbucket),
     NewContacts = Contacts#{BucketIndex => put_on(Bucket, Contact, Kbucket)},
     Kbucket#kbucket{contacts=NewContacts}.
 
-put_on([LeastContact | PartialBucket] = Bucket, Contact, #kbucket{k = K}) when length(Bucket) =:= K ->
-    {PeerPid, _} = LeastContact,
-    peer:ping(PeerPid),
-    receive
-        {pong, PeerPid} ->
-            Bucket
-    after ?TIMEOUT_PONG ->
-        put_on(PartialBucket, Contact, K)
+put_on([LeastContact | PartialBucket] = Bucket, Contact, #kbucket{k = K, peer = Peer}) when length(Bucket) =:= K ->
+    case peer:check_link(LeastContact, Peer) of
+        ok -> Bucket;
+        ko -> put_on(PartialBucket, Contact, K)
     end;
 put_on(Bucket, Contact, _) ->
     CleanedBucket = lists:delete(Contact, Bucket),

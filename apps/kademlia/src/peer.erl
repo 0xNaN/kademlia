@@ -6,7 +6,10 @@
 -export([find_value_of/3]).
 -export([find_closest_peers/3]).
 -export([pong/2]).
+-export([check_link/2]).
 -export([ping/2]).
+
+-define (TIMEOUT_PONG, 100).
 
 -record(peer, {id, repository, kbucket}).
 
@@ -41,6 +44,15 @@ pong({PeerPid, _}, FromPeer) ->
     PeerPid ! {pong, FromPeer},
     ok.
 
+check_link({PeerPid, _} = Peer, WithPeer) ->
+    PeerPid ! {check_link, self(), WithPeer},
+    receive
+        {Peer, ok} ->
+            ok;
+        {Peer, ko} ->
+            ko
+    end.
+
 loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
     MyContact = {self(), Id},
     receive
@@ -54,7 +66,7 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             pong(FromContact, MyContact),
             loop(Peer);
         {pong, FromContact} ->
-            kbucket:put(Kbucket, FromContact),
+            handle_pong(Kbucket, FromContact),
             loop(Peer);
         {find_value, {FromPid, _} = FromContact, Key} ->
             kbucket:put(Kbucket, FromContact),
@@ -66,9 +78,22 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             FilteredClosestPeers = handle_find_closest_peers(FromContact, Kbucket, Key),
             FromPid ! {self(), FilteredClosestPeers},
             loop(Peer);
+        {check_link, From, ToContact} ->
+            peer:ping(ToContact, MyContact),
+            receive
+                {pong, ToContact} ->
+                    handle_pong(Kbucket, ToContact),
+                    From ! {MyContact, ok}
+            after ?TIMEOUT_PONG ->
+                    From ! {MyContact, ko}
+            end,
+            loop(Peer);
         _ ->
             loop(Peer)
     end.
+
+handle_pong(Kbucket, FromContact) ->
+    kbucket:put(Kbucket, FromContact).
 
 handle_find_closest_peers(FromContact, Kbucket, Key) ->
     ClosestPeers = kbucket:closest_contacts(Kbucket, Key),
