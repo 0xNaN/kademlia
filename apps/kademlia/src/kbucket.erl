@@ -3,6 +3,8 @@
 -export([loop/1]).
 -export([put/2]).
 -export([set_peer/2]).
+-export([is_closest/3]).
+-export([k_closest_to/3]).
 -export([closest_contacts/2]).
 
 -type contact() :: {pid(), integer()} .
@@ -33,7 +35,14 @@ closest_contacts(KbucketPid, Key) ->
         {KbucketPid, Contacts} -> Contacts
     end.
 
-loop(Kbucket) ->
+k_closest_to(KbucketPid, Key, Contacts) ->
+    KbucketPid ! {k_closest_to, self(), Key, Contacts},
+    receive
+        {KbucketPid, Result} ->
+            Result
+    end.
+
+loop(#kbucket{k = K} = Kbucket) ->
     receive
         {put, Contact} ->
             NewKbucket = handle_put(Contact, Kbucket),
@@ -48,6 +57,11 @@ loop(Kbucket) ->
         {set_peer, PeerContact} ->
             NewKbucket = Kbucket#kbucket{peer = PeerContact},
             loop(NewKbucket);
+        {k_closest_to, From, Key, Contacts} ->
+            SortedContacts = sort_on(Key, Contacts),
+            Result = lists:sublist(SortedContacts, K),
+            From ! {self(), Result},
+            loop(Kbucket);
         _ ->
             loop(Kbucket)
     end.
@@ -84,12 +98,13 @@ all_contacts(Kbucket) ->
     lists:flatten(AllContacts).
 
 sort_on(Key, Contacts) ->
-    lists:sort(fun({_, FirstId}, {_, SecondId}) ->
-                       distance(Key, FirstId) =< distance(Key, SecondId)
-               end, Contacts).
+    lists:sort(fun(PeerA, PeerB) -> is_closest(PeerA, PeerB, Key) end, Contacts).
 
 distance(FromPeerId, ToPeerId) ->
     FromPeerId bxor ToPeerId.
+
+is_closest({_, PeerAId}, {_, PeerBId}, Key) ->
+    kbucket:distance(Key, PeerAId) < kbucket:distance(Key, PeerBId).
 
 bucket_index(Distance) ->
     trunc(math:log2(Distance)).

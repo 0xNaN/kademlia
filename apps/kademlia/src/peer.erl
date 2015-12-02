@@ -3,8 +3,10 @@
 -export([start/2]).
 -export([loop/1]).
 -export([check_link/2]).
+-export([iterative_find_peers/2]).
 
--define (TIMEOUT_PONG, 100).
+-define (TIMEOUT_REQUEST, 100).
+-define (ALPHA, 3).
 
 -record(peer, {id, repository, kbucket}).
 
@@ -20,6 +22,13 @@ start(Id, K) ->
     PeerContact = {PeerPid, Id},
     KbucketPid ! {set_peer, PeerContact},
     PeerContact.
+
+iterative_find_peers({PeerPid, _} = Peer, Key) ->
+    PeerPid ! {iterative_find_peers, self(), Key},
+    receive
+        {Peer, Result} ->
+            Result
+    end.
 
 check_link({PeerPid, _} = Peer, WithPeer) ->
     PeerPid ! {check_link, self(), WithPeer},
@@ -41,6 +50,16 @@ find_value_of({PeerPid, _}, Key, FromPeer) ->
 find_closest_peers({PeerPid, _}, Key, FromPeer) ->
     PeerPid ! {find_closest_peers, FromPeer, Key},
     ok.
+
+syn_find_closest_peers({PeerPid, _} = CandidatePeer, Key, FromPeer) ->
+    find_closest_peers(CandidatePeer, Key, FromPeer),
+    receive
+        %% XXX for consistency should tag with Contact
+        {PeerPid, Result} ->
+            Result
+        after ?TIMEOUT_REQUEST ->
+            []
+    end.
 
 ping({PeerPid, _}, FromPeer) ->
     PeerPid ! {ping, FromPeer},
@@ -81,12 +100,38 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
                 {pong, ToContact} ->
                     handle_pong(Kbucket, ToContact),
                     From ! {MyContact, ok}
-            after ?TIMEOUT_PONG ->
+            after ?TIMEOUT_REQUEST ->
                     From ! {MyContact, ko}
             end,
             loop(Peer);
+        {iterative_find_peers, From, Key} ->
+            Result = handle_iterative_find_peers(Peer, MyContact, Key),
+            From ! {MyContact, Result},
+            loop(Peer);
         _ ->
             loop(Peer)
+    end.
+
+handle_iterative_find_peers(#peer{kbucket = Kbucket}, MyContact, Key) ->
+    LocalClosestPeers = kbucket:closest_contacts(Kbucket, Key),
+    ClosestSoFar = hd(LocalClosestPeers),
+    do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, LocalClosestPeers, Key).
+
+do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, ClosestPeers, Key) ->
+    SelectedContacts = lists:sublist(ClosestPeers, ?ALPHA),
+    ContactsFound = lists:flatmap(fun(Contact) ->
+                                      syn_find_closest_peers(Contact, Key, MyContact)
+                                  end, SelectedContacts),
+    AllKnownClosestContacts = append_unique(ContactsFound, SelectedContacts),
+    KClosestContacts = kbucket:k_closest_to(Kbucket, Key, AllKnownClosestContacts),
+    CandidateClosest = hd(KClosestContacts),
+    case kbucket:is_closest(CandidateClosest, ClosestSoFar, Key) of
+        true ->
+            do_iterative_find_peers(Kbucket, MyContact, CandidateClosest, KClosestContacts, Key);
+        false ->
+            %% a the end we have to check if the peer itself should be inserted
+            %% on the result: we can add it only a the end since we what to avoid loops
+            kbucket:k_closest_to(Kbucket, Key, [MyContact | KClosestContacts])
     end.
 
 handle_pong(Kbucket, FromContact) ->
@@ -104,6 +149,10 @@ handle_find_value(FromContact, Key, #peer{repository = Repository, kbucket = Kbu
         false ->
             handle_find_closest_peers(FromContact, Kbucket, Key)
     end.
+
+append_unique(FirstList, SecondList) ->
+    List = lists:append(FirstList, SecondList),
+    sets:to_list(sets:from_list(List)).
 
 -ifdef(TEST).
 -compile([export_all]).
