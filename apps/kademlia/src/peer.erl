@@ -51,11 +51,11 @@ find_closest_peers({PeerPid, _}, Key, FromPeer) ->
     PeerPid ! {find_closest_peers, FromPeer, Key},
     ok.
 
-syn_find_closest_peers({PeerPid, _} = CandidatePeer, Key, FromPeer) ->
+syn_find_closest_peers(CandidatePeer, Key, FromPeer) ->
     find_closest_peers(CandidatePeer, Key, FromPeer),
     receive
         %% XXX for consistency should tag with Contact
-        {PeerPid, Result} ->
+        {CandidatePeer, Result} ->
             Result
         after ?TIMEOUT_REQUEST ->
             []
@@ -87,12 +87,12 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
         {find_value, {FromPid, _} = FromContact, Key} ->
             kbucket:put(Kbucket, FromContact),
             ResponseValue = handle_find_value(FromContact, Key, Peer),
-            FromPid ! {self(), ResponseValue},
+            FromPid ! {MyContact, ResponseValue},
             loop(Peer);
         {find_closest_peers, {FromPid, _} = FromContact, Key} ->
             kbucket:put(Kbucket, FromContact),
             FilteredClosestPeers = handle_find_closest_peers(FromContact, Kbucket, Key),
-            FromPid ! {self(), FilteredClosestPeers},
+            FromPid ! {MyContact, FilteredClosestPeers},
             loop(Peer);
         {check_link, From, ToContact} ->
             ping(ToContact, MyContact),
@@ -129,8 +129,10 @@ do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, ClosestPeers, Key) ->
         true ->
             do_iterative_find_peers(Kbucket, MyContact, CandidateClosest, KClosestContacts, Key);
         false ->
-            %% a the end we have to check if the peer itself should be inserted
-            %% on the result: we can add it only a the end since we what to avoid loops
+            %% XXX: it is not clear if the requesting node should be inserted on the
+            %% result if it is one of the k-closest peers.
+            %% Currently we add it but this should be confirmed by future use of this
+            %% function
             kbucket:k_closest_to(Kbucket, Key, [MyContact | KClosestContacts])
     end.
 
