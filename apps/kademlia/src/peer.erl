@@ -69,6 +69,13 @@ pong({PeerPid, _}, FromPeer) ->
     PeerPid ! {pong, FromPeer},
     ok.
 
+join({PeerPid, _} = Peer, BootstrapPeer) ->
+    PeerPid ! {join, self(), BootstrapPeer},
+    receive
+        {Peer, ok} ->
+            ok
+    end.
+
 loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
     MyContact = {self(), Id},
     receive
@@ -95,21 +102,32 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             FromPid ! {MyContact, FilteredClosestPeers},
             loop(Peer);
         {check_link, From, ToContact} ->
-            ping(ToContact, MyContact),
-            receive
-                {pong, ToContact} ->
-                    handle_pong(Kbucket, ToContact),
-                    From ! {MyContact, ok}
-            after ?TIMEOUT_REQUEST ->
-                    From ! {MyContact, ko}
-            end,
+            Result = handle_check_link(Kbucket, MyContact, ToContact),
+            From ! {MyContact, Result},
             loop(Peer);
         {iterative_find_peers, From, Key} ->
             Result = handle_iterative_find_peers(Peer, MyContact, Key),
             From ! {MyContact, Result},
             loop(Peer);
+        {join, From, BootstrapPeer} ->
+            kbucket:put(Kbucket, BootstrapPeer),
+            MyKClosest = handle_iterative_find_peers(Peer, MyContact, Id),
+            KClosest = lists:delete(MyContact, MyKClosest),
+            lists:foreach(fun(Neighbor) -> handle_check_link(Kbucket, MyContact, Neighbor) end, KClosest),
+            From ! {MyContact, ok},
+            loop(Peer);
         _ ->
             loop(Peer)
+    end.
+
+handle_check_link(Kbucket, MyContact, ToContact) ->
+    ping(ToContact, MyContact),
+    receive
+        {pong, ToContact} ->
+            handle_pong(Kbucket, ToContact),
+            ok
+    after ?TIMEOUT_REQUEST ->
+            ko
     end.
 
 handle_iterative_find_peers(#peer{kbucket = Kbucket}, MyContact, Key) ->

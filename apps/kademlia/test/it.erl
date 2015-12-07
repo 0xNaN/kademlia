@@ -52,3 +52,20 @@ should_find_the_closest_peer_for_a_given_key_in_a_complex_network_test() ->
     Key = 3,
     ClosestPeers = peer:iterative_find_peers(PeerE, Key),
     ?assertEqual([PeerB, PeerA, PeerZ], ClosestPeers).
+
+join_should_update_kbucket_of_bootstrap_peer_test() ->
+    K = 3,
+    {KbucketA, PeerA} = new_peer(1, K),
+    {KbucketB, PeerB} = new_peer(2, K),
+
+    peer:join(PeerA, PeerB),
+
+    ?assertEqual([PeerB], kbucket:get(KbucketA, 1)),
+    ?assertEqual([PeerA], kbucket:get(KbucketB, 1)).
+
+
+new_peer(Id, K) ->
+    Kbucket = kbucket:start(K),
+    Peer = peer:start(Id, Kbucket),
+    Kbucket ! {set_peer, Peer},
+    {Kbucket, Peer}.
