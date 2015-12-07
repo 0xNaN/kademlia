@@ -7,9 +7,10 @@ start() ->
     meck:new(peer),
     meck:expect(peer, start, fun(Id, Kbucket) -> {self(), Id} end),
     K = 3,
-    KbucketPid = kbucket:start(K),
-    kbucket:set_peer(KbucketPid, peer:start(?PEER_ID, KbucketPid)),
-    KbucketPid.
+    KbucketPid = kbucket:start(K, 4),
+    Peer = peer:start(?PEER_ID, KbucketPid),
+    kbucket:set_peer(KbucketPid, Peer),
+    {KbucketPid, Peer}.
 
 teardown(_) ->
     meck:unload(peer).

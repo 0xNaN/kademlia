@@ -7,6 +7,7 @@
 
 -define (TIMEOUT_REQUEST, 100).
 -define (ALPHA, 3).
+-define (KEY_LENGTH, 160).
 
 -record(peer, {id, repository, kbucket}).
 
@@ -16,7 +17,7 @@ start(Id, KbucketPid) when is_pid(KbucketPid) ->
     PeerPid = spawn(fun() -> loop(Peer) end),
     {PeerPid, Id};
 start(Id, K) ->
-    KbucketPid = kbucket:start(K),
+    KbucketPid = kbucket:start(K, ?KEY_LENGTH),
     Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
     PeerPid = spawn(fun() -> loop(Peer) end),
     PeerContact = {PeerPid, Id},

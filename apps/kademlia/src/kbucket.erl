@@ -1,5 +1,5 @@
 -module(kbucket).
--export([start/1]).
+-export([start/2]).
 -export([loop/1]).
 -export([put/2]).
 -export([set_peer/2]).
@@ -9,10 +9,10 @@
 
 -type contact() :: {pid(), integer()} .
 
--record(kbucket, {peer, k, contacts}).
+-record(kbucket, {peer, k, contacts, keylength}).
 
-start(K) ->
-    Kbucket = #kbucket{k=K, contacts=#{}},
+start(K, Keylength) ->
+    Kbucket = #kbucket{k = K, keylength = Keylength, contacts = #{}},
     spawn(fun() -> loop(Kbucket) end).
 
 put(KbucketPid, PeerId) ->

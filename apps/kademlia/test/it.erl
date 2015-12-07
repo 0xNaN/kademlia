@@ -87,7 +87,7 @@ a_joining_peer_should_know_its_closest_neighbours_test() ->
     ?assertEqual([PeerC, PeerB], kbucket:get(KbucketD, 3)).
 
 new_peer(Id, K) ->
-    Kbucket = kbucket:start(K),
+    Kbucket = kbucket:start(K, 4),
     Peer = peer:start(Id, Kbucket),
     Kbucket ! {set_peer, Peer},
     {Kbucket, Peer}.
