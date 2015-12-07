@@ -19,8 +19,8 @@ put(KbucketPid, PeerId) ->
     KbucketPid ! {put, PeerId},
     ok.
 
-get(KbucketPid, Distance) ->
-    KbucketPid ! {get, self(), Distance},
+get(KbucketPid, BucketIndex) ->
+    KbucketPid ! {get, self(), BucketIndex},
     receive
         {KbucketPid, Bucket} -> Bucket
     end.
