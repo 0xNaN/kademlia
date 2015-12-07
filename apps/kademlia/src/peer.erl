@@ -111,13 +111,18 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             loop(Peer);
         {join, From, BootstrapPeer} ->
             kbucket:put(Kbucket, BootstrapPeer),
-            KClosest = peer:iterative_find_peers(BootstrapPeer, Id),
-            lists:foreach(fun(Neighbor) -> handle_check_link(Kbucket, MyContact, Neighbor) end, KClosest),
+            handle_join(Kbucket, MyContact, BootstrapPeer, Id),
             From ! {MyContact, ok},
             loop(Peer);
         _ ->
             loop(Peer)
     end.
+
+handle_join(Kbucket, MyContact, BootstrapPeer, Id) ->
+    MyKClosest = peer:iterative_find_peers(BootstrapPeer, Id),
+    lists:foreach(fun(Neighbor) ->
+                      handle_check_link(Kbucket, MyContact, Neighbor)
+                  end, MyKClosest).
 
 handle_check_link(Kbucket, MyContact, ToContact) ->
     ping(ToContact, MyContact),
