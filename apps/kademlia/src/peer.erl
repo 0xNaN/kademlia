@@ -111,8 +111,7 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             loop(Peer);
         {join, From, BootstrapPeer} ->
             kbucket:put(Kbucket, BootstrapPeer),
-            MyKClosest = handle_iterative_find_peers(Peer, MyContact, Id),
-            KClosest = lists:delete(MyContact, MyKClosest),
+            KClosest = peer:iterative_find_peers(BootstrapPeer, Id),
             lists:foreach(fun(Neighbor) -> handle_check_link(Kbucket, MyContact, Neighbor) end, KClosest),
             From ! {MyContact, ok},
             loop(Peer);
@@ -131,9 +130,14 @@ handle_check_link(Kbucket, MyContact, ToContact) ->
     end.
 
 handle_iterative_find_peers(#peer{kbucket = Kbucket}, MyContact, Key) ->
-    LocalClosestPeers = kbucket:closest_contacts(Kbucket, Key),
-    ClosestSoFar = hd(LocalClosestPeers),
-    do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, LocalClosestPeers, Key).
+    case kbucket:closest_contacts(Kbucket, Key) of
+        [] ->
+            [MyContact];
+
+        LocalClosestPeers ->
+            ClosestSoFar = hd(LocalClosestPeers),
+            do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, LocalClosestPeers, Key)
+    end.
 
 do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, ClosestPeers, Key) ->
     SelectedContacts = lists:sublist(ClosestPeers, ?ALPHA),
@@ -147,10 +151,6 @@ do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, ClosestPeers, Key) ->
         true ->
             do_iterative_find_peers(Kbucket, MyContact, CandidateClosest, KClosestContacts, Key);
         false ->
-            %% XXX: it is not clear if the requesting node should be inserted on the
-            %% result if it is one of the k-closest peers.
-            %% Currently we add it but this should be confirmed by future use of this
-            %% function
             kbucket:k_closest_to(Kbucket, Key, [MyContact | KClosestContacts])
     end.
 

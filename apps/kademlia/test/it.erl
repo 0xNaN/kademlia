@@ -63,6 +63,28 @@ join_should_update_kbucket_of_bootstrap_peer_test() ->
     ?assertEqual([PeerB], kbucket:get(KbucketA, 1)),
     ?assertEqual([PeerA], kbucket:get(KbucketB, 1)).
 
+a_joining_peer_should_know_its_closest_neighbours_test() ->
+    K = 3,
+    {KbucketA, PeerA} = new_peer(1, K),
+    {KbucketB, PeerB} = new_peer(9, K),
+    {KbucketC, PeerC} = new_peer(10, K),
+    {KbucketD, PeerD} = new_peer(2, K),
+
+    peer:join(PeerA, PeerB),
+    peer:join(PeerC, PeerB),
+    peer:join(PeerD, PeerC),
+
+    ?assertEqual([PeerD],        kbucket:get(KbucketA, 1)),
+    ?assertEqual([PeerB, PeerC], kbucket:get(KbucketA, 3)),
+
+    ?assertEqual([PeerC],        kbucket:get(KbucketB, 1)),
+    ?assertEqual([PeerA, PeerD], kbucket:get(KbucketB, 3)),
+
+    ?assertEqual([PeerB],        kbucket:get(KbucketC, 1)),
+    ?assertEqual([PeerA, PeerD], kbucket:get(KbucketC, 3)),
+
+    ?assertEqual([PeerA],        kbucket:get(KbucketD, 1)),
+    ?assertEqual([PeerC, PeerB], kbucket:get(KbucketD, 3)).
 
 new_peer(Id, K) ->
     Kbucket = kbucket:start(K),
