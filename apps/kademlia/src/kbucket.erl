@@ -42,7 +42,14 @@ k_closest_to(KbucketPid, Key, Contacts) ->
             Result
     end.
 
-loop(#kbucket{k = K} = Kbucket) ->
+refresh(Kbucket) ->
+    Kbucket ! {refresh, self()},
+    receive
+        {Kbucket, ok} ->
+            ok
+    end.
+
+loop(#kbucket{k = K, keylength = Keylength} = Kbucket) ->
     receive
         {put, Contact} ->
             NewKbucket = handle_put(Contact, Kbucket),
@@ -62,9 +69,17 @@ loop(#kbucket{k = K} = Kbucket) ->
             Result = lists:sublist(SortedContacts, K),
             From ! {self(), Result},
             loop(Kbucket);
+        {refresh, From} ->
+            #kbucket{peer = Peer} = Kbucket,
+            handle_refresh(Keylength, Peer),
+            From ! {self(), ok},
+            loop(Kbucket);
         _ ->
             loop(Kbucket)
     end.
+
+handle_refresh(Keylength, Peer) ->
+    lists:foreach(fun(Index) -> refresh_bucket(Index, Peer) end, lists:seq(0, Keylength - 1)).
 
 handle_closest_contacts(Key, Kbucket) ->
     SortedContacts = sort_on(Key, all_contacts(Kbucket)),
@@ -84,6 +99,10 @@ put_on([LeastContact | PartialBucket] = Bucket, Contact, #kbucket{k = K, peer = 
 put_on(Bucket, Contact, _) ->
     CleanedBucket = lists:delete(Contact, Bucket),
     lists:append(CleanedBucket, [Contact]).
+
+refresh_bucket(BucketIndex, {_, PeerId} = Peer) ->
+    Key = gen_key_within(BucketIndex, PeerId),
+    [kbucket:put(self(), Contact) || Contact <- peer:iterative_find_peers(Peer, Key)].
 
 bucket(BucketIndex, #kbucket{contacts = Contacts}) ->
     case maps:is_key(BucketIndex, Contacts) of
@@ -108,6 +127,9 @@ is_closest({_, PeerAId}, {_, PeerBId}, Key) ->
 
 bucket_index(Distance) ->
     trunc(math:log2(Distance)).
+
+gen_key_within(BucketIndex, Id) ->
+    trunc(math:pow(2, BucketIndex)) bxor Id.
 
 -ifdef(TEST).
 -compile([export_all]).
