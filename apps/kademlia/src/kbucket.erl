@@ -6,6 +6,7 @@
 -export([is_closest/3]).
 -export([k_closest_to/3]).
 -export([closest_contacts/2]).
+-export([refresh/1]).
 
 -type contact() :: {pid(), integer()} .
 
@@ -79,7 +80,11 @@ loop(#kbucket{k = K, keylength = Keylength} = Kbucket) ->
     end.
 
 handle_refresh(Keylength, Peer) ->
-    lists:foreach(fun(Index) -> refresh_bucket(Index, Peer) end, lists:seq(0, Keylength - 1)).
+    lists:foreach(fun(Index) ->
+                          %% NOTE: maybe we can call only handle_refresh on a new
+                          %% process
+                     spawn(kbucket, refresh_bucket, [self(), Index, Peer])
+                  end, lists:seq(0, Keylength - 1)).
 
 handle_closest_contacts(Key, Kbucket) ->
     SortedContacts = sort_on(Key, all_contacts(Kbucket)),
@@ -100,9 +105,10 @@ put_on(Bucket, Contact, _) ->
     CleanedBucket = lists:delete(Contact, Bucket),
     lists:append(CleanedBucket, [Contact]).
 
-refresh_bucket(BucketIndex, {_, PeerId} = Peer) ->
+refresh_bucket(Kbucket, BucketIndex, {_, PeerId} = Peer) ->
     Key = gen_key_within(BucketIndex, PeerId),
-    [kbucket:put(self(), Contact) || Contact <- peer:iterative_find_peers(Peer, Key)].
+    ClosestPeers = peer:iterative_find_peers(Peer, Key),
+    [kbucket:put(Kbucket, Contact) || Contact <- lists:delete(Peer, ClosestPeers)].
 
 bucket(BucketIndex, #kbucket{contacts = Contacts}) ->
     case maps:is_key(BucketIndex, Contacts) of

@@ -123,7 +123,8 @@ handle_join(Kbucket, MyContact, BootstrapPeer, Id) ->
     MyKClosest = peer:iterative_find_peers(BootstrapPeer, Id),
     lists:foreach(fun(Neighbor) ->
                       handle_check_link(Kbucket, MyContact, Neighbor)
-                  end, MyKClosest).
+                  end, MyKClosest),
+    kbucket:refresh(Kbucket).
 
 handle_check_link(Kbucket, MyContact, ToContact) ->
     ping(ToContact, MyContact),
