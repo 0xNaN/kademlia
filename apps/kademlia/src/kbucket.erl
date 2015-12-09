@@ -50,50 +50,57 @@ refresh(Kbucket) ->
             ok
     end.
 
-loop(#kbucket{k = K, keylength = Keylength, peer = Peer} = Kbucket) ->
+loop(#kbucket{keylength = Keylength, peer = Peer, contacts = Contacts} = Kbucket) ->
     receive
-        {put, Contact} when Peer =/= Contact->
-            NewKbucket = handle_put(Contact, Kbucket),
+        {put, Contact} when Contact =/= Peer ->
+            NewKbucket = handle_put(Kbucket, Contact),
             loop(NewKbucket);
         {closest_contacts, FromPeer, Key} ->
-            ClosestContacts = handle_closest_contacts(Key, Kbucket),
+            ClosestContacts = handle_closest_contacts(Kbucket, Key),
             FromPeer ! {self(), ClosestContacts},
             loop(Kbucket);
         {get, FromPeer, BucketIndex} ->
-            FromPeer ! {self(), bucket(BucketIndex, Kbucket)},
+            FromPeer ! {self(), bucket(BucketIndex, Contacts)},
             loop(Kbucket);
         {set_peer, PeerContact} ->
             NewKbucket = Kbucket#kbucket{peer = PeerContact},
             loop(NewKbucket);
-        {k_closest_to, From, Key, Contacts} ->
-            SortedContacts = sort_on(Key, Contacts),
-            Result = lists:sublist(SortedContacts, K),
+        {k_closest_to, From, Key, ListOfContacts} ->
+            Result = handle_k_closest_to(Kbucket, Key, ListOfContacts),
             From ! {self(), Result},
             loop(Kbucket);
         {refresh, From} ->
-            handle_refresh(Keylength, Peer),
+            handle_refresh(Kbucket, Keylength),
             From ! {self(), ok},
             loop(Kbucket);
         _ ->
             loop(Kbucket)
     end.
 
-handle_refresh(Keylength, Peer) ->
+handle_k_closest_to(#kbucket{k = K}, Key, ListOfContacts) ->
+    SortedContacts = sort_on(Key, ListOfContacts),
+    lists:sublist(SortedContacts, K).
+
+handle_refresh(#kbucket{peer = Peer}, Keylength) ->
     lists:foreach(fun(Index) ->
                           %% NOTE: maybe we can call only handle_refresh on a new
                           %% process
                      spawn(kbucket, refresh_bucket, [self(), Index, Peer])
                   end, lists:seq(0, Keylength - 1)).
 
-handle_closest_contacts(Key, Kbucket) ->
-    SortedContacts = sort_on(Key, all_contacts(Kbucket)),
-    lists:sublist(SortedContacts, Kbucket#kbucket.k).
+handle_closest_contacts(#kbucket{k = K, contacts = Contacts}, Key) ->
+    SortedContacts = sort_on(Key, contacts_to_list(Contacts)),
+    lists:sublist(SortedContacts, K).
 
-handle_put({_, PeerId} = Contact, #kbucket{contacts = Contacts, peer = {_, Id}} = Kbucket) ->
-    BucketIndex = bucket_index(distance(Id, PeerId)),
-    Bucket = bucket(BucketIndex, Kbucket),
-    NewContacts = Contacts#{BucketIndex => put_on(Bucket, Contact, Kbucket)},
-    Kbucket#kbucket{contacts=NewContacts}.
+handle_put(#kbucket{contacts = Contacts} = Kbucket, Contact) ->
+    {BucketIndex, Bucket} = bucket_for(Kbucket, Contact),
+    NewBucket = put_on(Bucket, Contact, Kbucket),
+    NewContacts = Contacts#{BucketIndex => NewBucket},
+    Kbucket#kbucket{contacts = NewContacts}.
+
+bucket_for(#kbucket{contacts = Contacts, peer = {_, MyId}}, {_, ContactId}) ->
+    DestinationBucketIndex = bucket_index(distance(MyId, ContactId)),
+    {DestinationBucketIndex, bucket(DestinationBucketIndex, Contacts)}.
 
 put_on([LeastContact | PartialBucket] = Bucket, Contact, #kbucket{k = K, peer = Peer}) when length(Bucket) =:= K ->
     case peer:check_link(LeastContact, Peer) of
@@ -109,16 +116,15 @@ refresh_bucket(Kbucket, BucketIndex, {_, PeerId} = Peer) ->
     ClosestPeers = peer:iterative_find_peers(Peer, Key),
     [kbucket:put(Kbucket, Contact) || Contact <- lists:delete(Peer, ClosestPeers)].
 
-bucket(BucketIndex, #kbucket{contacts = Contacts}) ->
+bucket(BucketIndex, Contacts) ->
     case maps:is_key(BucketIndex, Contacts) of
         true -> #{BucketIndex := Bucket} = Contacts,
                 Bucket;
         _    -> []
     end.
 
-all_contacts(Kbucket) ->
-    Indexes = maps:keys(Kbucket#kbucket.contacts),
-    AllContacts = lists:map(fun(Index) -> bucket(Index, Kbucket) end, Indexes),
+contacts_to_list(Contacts) ->
+    AllContacts = lists:map(fun(Index) -> bucket(Index, Contacts) end, maps:keys(Contacts)),
     lists:flatten(AllContacts).
 
 sort_on(Key, Contacts) ->
