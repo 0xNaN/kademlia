@@ -9,8 +9,7 @@
 -define (ALPHA, 3).
 -define (KEY_LENGTH, 160).
 
--record(peer, {id, repository, kbucket, mycontact}).
-
+-record(peer, {mycontact, repository, kbucket}).
 
 start(Id, KbucketPid) when is_pid(KbucketPid) ->
     PeerPid = spawn(fun() -> loop(build_peer(Id, KbucketPid)) end),
@@ -23,7 +22,7 @@ start(Id, K) ->
     PeerContact.
 
 build_peer(Id, Kbucket) ->
-    Peer = #peer{id = Id, repository = #{}, kbucket = Kbucket, mycontact = {self(), Id}},
+    Peer = #peer{repository = #{}, kbucket = Kbucket, mycontact = {self(), Id}},
     Peer.
 
 iterative_find_peers({PeerPid, _} = Peer, Key) ->
@@ -86,7 +85,7 @@ join({PeerPid, _} = Peer, BootstrapPeer) ->
             ok
     end.
 
-loop(#peer{kbucket = Kbucket, id = Id, repository = Repository, mycontact = MyContact} = Peer) ->
+loop(#peer{kbucket = Kbucket, repository = Repository, mycontact = MyContact} = Peer) ->
     receive
         {store, FromContact, {Key, Value}} ->
             kbucket:put(Kbucket, FromContact),
@@ -124,7 +123,7 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository, mycontact = MyCo
             loop(Peer);
         {join, From, BootstrapPeer} ->
             kbucket:put(Kbucket, BootstrapPeer),
-            handle_join(Peer, BootstrapPeer, Id),
+            handle_join(Peer, BootstrapPeer),
             From ! {MyContact, ok},
             loop(Peer);
         _ ->
@@ -138,7 +137,8 @@ handle_iterative_store(#peer{mycontact = MyContact } = Peer, {Key, Value}) ->
     ClosestPeers = handle_iterative_find_peers(Peer, NumberKey),
     lists:foreach(fun(Contact) -> peer:store(Contact, {NumberKey, Value}, MyContact) end, ClosestPeers).
 
-handle_join(#peer{kbucket = Kbucket, mycontact = MyContact} = Peer, BootstrapPeer, Id) ->
+handle_join(#peer{kbucket = Kbucket, mycontact = MyContact} = Peer, BootstrapPeer) ->
+    {_, Id} = MyContact,
     MyKClosest = peer:iterative_find_peers(BootstrapPeer, Id),
     lists:foreach(fun(Neighbor) ->
                       handle_check_link(Peer, MyContact, Neighbor)
