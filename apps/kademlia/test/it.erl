@@ -1,4 +1,6 @@
 -module(it).
+
+-include_lib("test_macro.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 should_find_the_closest_peer_for_a_given_key_test() ->
@@ -86,8 +88,43 @@ a_joining_peer_should_know_its_closest_neighbours_test() ->
     ?assertEqual([PeerA],        kbucket:get(KbucketD, 1)),
     ?assertEqual([PeerC, PeerB], kbucket:get(KbucketD, 3)).
 
+should_store_a_key_on_closest_peers_test() ->
+    K = 3,
+    FakePeer = {self(), 100},
+
+    Key     = key,
+    HashKey = 16#A62F2225BF70BFACCBC7F1EF2A397836717377DE,
+    Value   = "value",
+
+    % distance with HashKey
+    % PeerA = 4, PeerB = 7, PeerC = 14, PeerD = ~2^159
+    PeerA = peer:start(16#A62F2225BF70BFACCBC7F1EF2A397836717377DA, K),
+    PeerB = peer:start(16#A62F2225BF70BFACCBC7F1EF2A397836717377D9, K),
+    PeerC = peer:start(16#A62F2225BF70BFACCBC7F1EF2A397836717377D0, K),
+    PeerD = peer:start(16#F62F2225BF70BFACCBC7F1EF2A397836717377DE, K),
+
+    peer:join(PeerA, PeerC),
+    peer:join(PeerB, PeerC),
+    peer:join(PeerD, PeerB),
+    timer:sleep(1000),
+
+    peer:iterative_store(PeerA, {Key, Value}),
+
+    peer:find_value_of(PeerA, HashKey, FakePeer),
+    ?receiving({PeerA, ResponseA}, ?assertEqual(Value, ResponseA)),
+
+    peer:find_value_of(PeerC, HashKey, FakePeer),
+    ?receiving({PeerC, ResponseB}, ?assertEqual(Value, ResponseB)),
+
+    peer:find_value_of(PeerB, HashKey, FakePeer),
+    ?receiving({PeerB, ResponseC}, ?assertEqual(Value, ResponseC)),
+
+    peer:find_value_of(PeerD, HashKey, FakePeer),
+    ?receiving({PeerD, ResponseD}, ?assertEqual([PeerA, PeerB, PeerC], ResponseD)).
+
 new_peer(Id, K) ->
     Kbucket = kbucket:start(K, 4),
     Peer = peer:start(Id, Kbucket),
     Kbucket ! {set_peer, Peer},
     {Kbucket, Peer}.
+

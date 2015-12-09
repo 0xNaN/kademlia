@@ -50,9 +50,9 @@ refresh(Kbucket) ->
             ok
     end.
 
-loop(#kbucket{k = K, keylength = Keylength} = Kbucket) ->
+loop(#kbucket{k = K, keylength = Keylength, peer = Peer} = Kbucket) ->
     receive
-        {put, Contact} ->
+        {put, Contact} when Peer =/= Contact->
             NewKbucket = handle_put(Contact, Kbucket),
             loop(NewKbucket);
         {closest_contacts, FromPeer, Key} ->
@@ -71,7 +71,6 @@ loop(#kbucket{k = K, keylength = Keylength} = Kbucket) ->
             From ! {self(), Result},
             loop(Kbucket);
         {refresh, From} ->
-            #kbucket{peer = Peer} = Kbucket,
             handle_refresh(Keylength, Peer),
             From ! {self(), ok},
             loop(Kbucket);

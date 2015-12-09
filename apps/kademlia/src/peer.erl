@@ -31,6 +31,13 @@ iterative_find_peers({PeerPid, _} = Peer, Key) ->
             Result
     end.
 
+iterative_store({PeerPid, _} = Peer, {Key, Value}) ->
+    PeerPid ! {iterative_store, self(), {Key, Value}},
+    receive
+        {Peer, Result} ->
+            Result
+    end.
+
 check_link({PeerPid, _} = Peer, WithPeer) ->
     PeerPid ! {check_link, self(), WithPeer},
     receive
@@ -110,6 +117,10 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
             Result = handle_iterative_find_peers(Peer, MyContact, Key),
             From ! {MyContact, Result},
             loop(Peer);
+        {iterative_store, From, {Key, Value}} ->
+            handle_iterative_store(Peer, MyContact, {Key, Value}),
+            From ! {MyContact, ok},
+            loop(Peer);
         {join, From, BootstrapPeer} ->
             kbucket:put(Kbucket, BootstrapPeer),
             handle_join(Kbucket, MyContact, BootstrapPeer, Id),
@@ -118,6 +129,13 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
         _ ->
             loop(Peer)
     end.
+
+handle_iterative_store(Peer, MyContact, {Key, Value}) ->
+    HashedKey = crypto:hash(sha, atom_to_list(Key)),
+    %% XXX: NumberKey should be removed when ID become binary
+    <<NumberKey:?KEY_LENGTH>> = HashedKey,
+    ClosestPeers = handle_iterative_find_peers(Peer, MyContact, NumberKey),
+    lists:foreach(fun(Contact) -> peer:store(Contact, {NumberKey, Value}, MyContact) end, ClosestPeers).
 
 handle_join(Kbucket, MyContact, BootstrapPeer, Id) ->
     MyKClosest = peer:iterative_find_peers(BootstrapPeer, Id),
