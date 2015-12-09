@@ -98,74 +98,74 @@ loop(#peer{kbucket = Kbucket, id = Id, repository = Repository, mycontact = MyCo
             pong(FromContact, MyContact),
             loop(Peer);
         {pong, FromContact} ->
-            handle_pong(Kbucket, FromContact),
+            handle_pong(Peer, FromContact),
             loop(Peer);
         {find_value, {FromPid, _} = FromContact, Key} ->
             kbucket:put(Kbucket, FromContact),
-            ResponseValue = handle_find_value(FromContact, Key, Peer),
+            ResponseValue = handle_find_value(Peer, FromContact, Key),
             FromPid ! {MyContact, ResponseValue},
             loop(Peer);
         {find_closest_peers, {FromPid, _} = FromContact, Key} ->
             kbucket:put(Kbucket, FromContact),
-            FilteredClosestPeers = handle_find_closest_peers(FromContact, Kbucket, Key),
+            FilteredClosestPeers = handle_find_closest_peers(Peer, FromContact, Key),
             FromPid ! {MyContact, FilteredClosestPeers},
             loop(Peer);
         {check_link, From, ToContact} ->
-            Result = handle_check_link(Kbucket, MyContact, ToContact),
+            Result = handle_check_link(Peer, MyContact, ToContact),
             From ! {MyContact, Result},
             loop(Peer);
         {iterative_find_peers, From, Key} ->
-            Result = handle_iterative_find_peers(Peer, MyContact, Key),
+            Result = handle_iterative_find_peers(Peer, Key),
             From ! {MyContact, Result},
             loop(Peer);
         {iterative_store, From, {Key, Value}} ->
-            handle_iterative_store(Peer, MyContact, {Key, Value}),
+            handle_iterative_store(Peer, {Key, Value}),
             From ! {MyContact, ok},
             loop(Peer);
         {join, From, BootstrapPeer} ->
             kbucket:put(Kbucket, BootstrapPeer),
-            handle_join(Kbucket, MyContact, BootstrapPeer, Id),
+            handle_join(Peer, BootstrapPeer, Id),
             From ! {MyContact, ok},
             loop(Peer);
         _ ->
             loop(Peer)
     end.
 
-handle_iterative_store(Peer, MyContact, {Key, Value}) ->
+handle_iterative_store(#peer{mycontact = MyContact } = Peer, {Key, Value}) ->
     HashedKey = crypto:hash(sha, atom_to_list(Key)),
     %% XXX: NumberKey should be removed when ID become binary
     <<NumberKey:?KEY_LENGTH>> = HashedKey,
-    ClosestPeers = handle_iterative_find_peers(Peer, MyContact, NumberKey),
+    ClosestPeers = handle_iterative_find_peers(Peer, NumberKey),
     lists:foreach(fun(Contact) -> peer:store(Contact, {NumberKey, Value}, MyContact) end, ClosestPeers).
 
-handle_join(Kbucket, MyContact, BootstrapPeer, Id) ->
+handle_join(#peer{kbucket = Kbucket, mycontact = MyContact} = Peer, BootstrapPeer, Id) ->
     MyKClosest = peer:iterative_find_peers(BootstrapPeer, Id),
     lists:foreach(fun(Neighbor) ->
-                      handle_check_link(Kbucket, MyContact, Neighbor)
+                      handle_check_link(Peer, MyContact, Neighbor)
                   end, MyKClosest),
     kbucket:refresh(Kbucket).
 
-handle_check_link(Kbucket, MyContact, ToContact) ->
+handle_check_link(Peer, MyContact, ToContact) ->
     ping(ToContact, MyContact),
     receive
         {pong, ToContact} ->
-            handle_pong(Kbucket, ToContact),
+            handle_pong(Peer, ToContact),
             ok
     after ?TIMEOUT_REQUEST ->
             ko
     end.
 
-handle_iterative_find_peers(#peer{kbucket = Kbucket}, MyContact, Key) ->
+handle_iterative_find_peers(#peer{kbucket = Kbucket, mycontact = MyContact} = Peer, Key) ->
     case kbucket:closest_contacts(Kbucket, Key) of
         [] ->
             [MyContact];
 
         LocalClosestPeers ->
             ClosestSoFar = hd(LocalClosestPeers),
-            do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, LocalClosestPeers, Key)
+            do_iterative_find_peers(Peer, ClosestSoFar, LocalClosestPeers, Key)
     end.
 
-do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, ClosestPeers, Key) ->
+do_iterative_find_peers(#peer{kbucket = Kbucket, mycontact = MyContact} = Peer, ClosestSoFar, ClosestPeers, Key) ->
     SelectedContacts = lists:sublist(ClosestPeers, ?ALPHA),
     ContactsFound = lists:flatmap(fun(Contact) ->
                                       syn_find_closest_peers(Contact, Key, MyContact)
@@ -175,25 +175,25 @@ do_iterative_find_peers(Kbucket, MyContact, ClosestSoFar, ClosestPeers, Key) ->
     CandidateClosest = hd(KClosestContacts),
     case kbucket:is_closest(CandidateClosest, ClosestSoFar, Key) of
         true ->
-            do_iterative_find_peers(Kbucket, MyContact, CandidateClosest, KClosestContacts, Key);
+            do_iterative_find_peers(Peer, CandidateClosest, KClosestContacts, Key);
         false ->
             kbucket:k_closest_to(Kbucket, Key, [MyContact | KClosestContacts])
     end.
 
-handle_pong(Kbucket, FromContact) ->
+handle_pong(#peer{kbucket = Kbucket}, FromContact) ->
     kbucket:put(Kbucket, FromContact).
 
-handle_find_closest_peers(FromContact, Kbucket, Key) ->
+handle_find_closest_peers(#peer{kbucket = Kbucket}, FromContact, Key) ->
     ClosestPeers = kbucket:closest_contacts(Kbucket, Key),
     lists:delete(FromContact, ClosestPeers).
 
-handle_find_value(FromContact, Key, #peer{repository = Repository, kbucket = Kbucket}) ->
+handle_find_value(#peer{repository = Repository} = Peer, FromContact, Key) ->
     case maps:is_key(Key, Repository) of
         true ->
             #{Key := Value} = Repository,
             Value;
         false ->
-            handle_find_closest_peers(FromContact, Kbucket, Key)
+            handle_find_closest_peers(Peer, FromContact, Key)
     end.
 
 append_unique(FirstList, SecondList) ->
