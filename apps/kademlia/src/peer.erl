@@ -9,20 +9,22 @@
 -define (ALPHA, 3).
 -define (KEY_LENGTH, 160).
 
--record(peer, {id, repository, kbucket}).
+-record(peer, {id, repository, kbucket, mycontact}).
 
 
 start(Id, KbucketPid) when is_pid(KbucketPid) ->
-    Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
-    PeerPid = spawn(fun() -> loop(Peer) end),
+    PeerPid = spawn(fun() -> loop(build_peer(Id, KbucketPid)) end),
     {PeerPid, Id};
 start(Id, K) ->
     KbucketPid = kbucket:start(K, ?KEY_LENGTH),
-    Peer = #peer{id = Id, repository = #{}, kbucket = KbucketPid},
-    PeerPid = spawn(fun() -> loop(Peer) end),
+    PeerPid = spawn(fun() -> loop(build_peer(Id, KbucketPid)) end),
     PeerContact = {PeerPid, Id},
     KbucketPid ! {set_peer, PeerContact},
     PeerContact.
+
+build_peer(Id, Kbucket) ->
+    Peer = #peer{id = Id, repository = #{}, kbucket = Kbucket, mycontact = {self(), Id}},
+    Peer.
 
 iterative_find_peers({PeerPid, _} = Peer, Key) ->
     PeerPid ! {iterative_find_peers, self(), Key},
@@ -84,8 +86,7 @@ join({PeerPid, _} = Peer, BootstrapPeer) ->
             ok
     end.
 
-loop(#peer{kbucket = Kbucket, id = Id, repository = Repository} = Peer) ->
-    MyContact = {self(), Id},
+loop(#peer{kbucket = Kbucket, id = Id, repository = Repository, mycontact = MyContact} = Peer) ->
     receive
         {store, FromContact, {Key, Value}} ->
             kbucket:put(Kbucket, FromContact),
