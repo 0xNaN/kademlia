@@ -31,7 +31,7 @@ should_store_data({Peer, KbucketPid}) ->
     peer:store(Peer, {Key, Value}, FakePeer),
     peer:find_value_of(Peer, Key, FakePeer),
 
-    ?receiving({Peer, ResponseValue},
+    ?receiving({Peer, {found, ResponseValue}},
                     [?_assertEqual(Value, ResponseValue),
                      ?_assertEqual(2, meck:num_calls(kbucket, put, [KbucketPid, FakePeer]))]).
 
@@ -45,7 +45,7 @@ should_overwrite_data_with_same_key({Peer, KbucketPid}) ->
     peer:store(Peer, {Key, SecondValue}, FakePeer),
     peer:find_value_of(Peer, Key, FakePeer),
 
-    ?receiving({Peer, ResponseValue},
+    ?receiving({Peer, {found, ResponseValue}},
                     [?_assertEqual(SecondValue, ResponseValue),
                      ?_assertEqual(3, meck:num_calls(kbucket, put, [KbucketPid, FakePeer]))]).
 
