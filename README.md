@@ -1,4 +1,4 @@
-An Erlang implementation ofkademlia
+An Erlang implementation of kademlia
 =====
 
 Build
