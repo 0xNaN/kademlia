@@ -7,6 +7,8 @@
 -export([iterative_store/2]).
 -export([iterative_find_value/2]).
 
+-define (LOG(From, To, Msg, Args), lager:info("[PEER] ~p <- ~p: ~p ~p", [To, From, Msg, Args])).
+
 -define (TIMEOUT_REQUEST, 100).
 -define (ALPHA, 3).
 -define (KEY_LENGTH, 160).
@@ -106,46 +108,58 @@ join({PeerPid, _} = Peer, BootstrapPeer) ->
 loop(#peer{kbucket = Kbucket, repository = Repository, mycontact = MyContact} = Peer) ->
     receive
         {store, FromContact, {Key, Value}} ->
+            ?LOG(FromContact, MyContact, "STORE", {Key, Value}),
             kbucket:put(Kbucket, FromContact),
             NewRepository = Repository#{Key => Value},
             NewPeer = Peer#peer{repository = NewRepository},
             loop(NewPeer);
         {ping, FromContact} ->
+            ?LOG(FromContact, MyContact, "PING", ""),
             kbucket:put(Kbucket, FromContact),
             pong(FromContact, MyContact),
             loop(Peer);
         {pong, FromContact} ->
+            ?LOG(FromContact, MyContact, "PONG", ""),
             handle_pong(Peer, FromContact),
             loop(Peer);
         {find_value, {FromPid, _} = FromContact, Key} ->
+            ?LOG(FromContact, MyContact, "FIND_VALUE", Key),
             kbucket:put(Kbucket, FromContact),
             ResponseValue = handle_find_value(Peer, FromContact, Key),
             FromPid ! {MyContact, ResponseValue},
             loop(Peer);
         {find_closest_peers, {FromPid, _} = FromContact, Key} ->
+            ?LOG(FromContact, MyContact, "FIND_CLOSEST_PEERS", Key),
             kbucket:put(Kbucket, FromContact),
             FilteredClosestPeers = handle_find_closest_peers(Peer, FromContact, Key),
             FromPid ! {MyContact, FilteredClosestPeers},
             loop(Peer);
         {check_link, From, ToContact} ->
+            ?LOG(From, MyContact, "CHECK_LINK", ToContact),
+            lager:info("[PEER] ~p <- ~p: CHECK_LINK ~p", [MyContact, From, ToContact]),
             Result = handle_check_link(Peer, MyContact, ToContact),
             From ! {MyContact, Result},
             loop(Peer);
         {iterative_find_peers, From, Key} ->
+            ?LOG(From, MyContact, "ITERATIVE_FIND_PEERS", Key),
+            lager:info("[PEER] ~p <- ~p: ITERATIVE_FIND_PEERS ~p", [MyContact, From, Key]),
             Result = handle_iterative_find_peers(Peer, Key),
             From ! {MyContact, Result},
             loop(Peer);
         {iterative_store, From, {Key, Value}} ->
+            ?LOG(From, MyContact, "ITERATIVE_STORE", {Key, Value}),
             handle_iterative_store(Peer, {Key, Value}),
             From ! {MyContact, ok},
             loop(Peer);
         {iterative_find_value, From, Key} ->
+            ?LOG(From, MyContact, "ITERATIVE_FIND_VALUE", Key),
             HashedKey = crypto:hash(sha, atom_to_list(Key)),
             <<NumberKey:?KEY_LENGTH>> = HashedKey,
             Value = handle_iterative_find_value(Peer, NumberKey),
             From ! {MyContact, Value},
             loop(Peer);
         {join, From, BootstrapPeer} ->
+            ?LOG(From, MyContact, "JOIN", BootstrapPeer),
             kbucket:put(Kbucket, BootstrapPeer),
             handle_join(Peer, BootstrapPeer),
             From ! {MyContact, ok},
@@ -253,6 +267,5 @@ append_unique(FirstList, SecondList) ->
     sets:to_list(sets:from_list(List)).
 
 -ifdef(TEST).
--compile([export_all]).
 -include_lib("../test/peer.hrl").
 -endif.

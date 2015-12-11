@@ -8,6 +8,8 @@
 -export([closest_contacts/2]).
 -export([refresh/1]).
 
+-define (LOG(From, To, Msg, Args), lager:info("[KBUCKET] ~p <- ~p: ~p ~p", [To, From, Msg, Args])).
+
 -type contact() :: {pid(), integer()} .
 
 -record(kbucket, {peer, k, contacts, keylength}).
@@ -16,8 +18,8 @@ start(K, Keylength) ->
     Kbucket = #kbucket{k = K, keylength = Keylength, contacts = #{}},
     spawn(fun() -> loop(Kbucket) end).
 
-put(KbucketPid, PeerId) ->
-    KbucketPid ! {put, PeerId},
+put(KbucketPid, Peer) ->
+    KbucketPid ! {put, self(), Peer},
     ok.
 
 get(KbucketPid, BucketIndex) ->
@@ -52,14 +54,17 @@ refresh(Kbucket) ->
 
 loop(#kbucket{keylength = Keylength, peer = Peer, contacts = Contacts} = Kbucket) ->
     receive
-        {put, Contact} when Contact =/= Peer ->
+        {put, FromPeer, Contact} when Contact =/= Peer ->
+            ?LOG(FromPeer, self(), "PUT", Contact),
             NewKbucket = handle_put(Kbucket, Contact),
             loop(NewKbucket);
         {closest_contacts, FromPeer, Key} ->
+            ?LOG(FromPeer, self(), "CLOSEST_CONTACTS", Key),
             ClosestContacts = handle_closest_contacts(Kbucket, Key),
             FromPeer ! {self(), ClosestContacts},
             loop(Kbucket);
         {get, FromPeer, BucketIndex} ->
+            ?LOG(FromPeer, self(), "GET", BucketIndex),
             FromPeer ! {self(), bucket(BucketIndex, Contacts)},
             loop(Kbucket);
         {set_peer, PeerContact} ->
@@ -70,6 +75,7 @@ loop(#kbucket{keylength = Keylength, peer = Peer, contacts = Contacts} = Kbucket
             From ! {self(), Result},
             loop(Kbucket);
         {refresh, From} ->
+            ?LOG(From, self(), "REFRESH", ""),
             handle_refresh(Kbucket, Keylength),
             From ! {self(), ok},
             loop(Kbucket);
