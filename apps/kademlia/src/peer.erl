@@ -149,9 +149,7 @@ loop(#peer{kbucket = Kbucket, repository = Repository, mycontact = MyContact} = 
             loop(Peer);
         {iterative_find_value, From, Key} ->
             log:peer(Peer, log:pid_to_field(From, "from"), "ITERATIVE_FIND_VALUE ~p", [Key]),
-            HashedKey = crypto:hash(sha, atom_to_list(Key)),
-            <<NumberKey:?KEY_LENGTH>> = HashedKey,
-            Value = handle_iterative_find_value(Peer, NumberKey),
+            Value = handle_iterative_find_value(Peer, hash_key(Key)),
             From ! {MyContact, Value},
             loop(Peer);
         {join, From, BootstrapPeer} ->
@@ -165,11 +163,9 @@ loop(#peer{kbucket = Kbucket, repository = Repository, mycontact = MyContact} = 
     end.
 
 handle_iterative_store(#peer{mycontact = MyContact } = Peer, {Key, Value}) ->
-    HashedKey = crypto:hash(sha, atom_to_list(Key)),
-    %% XXX: NumberKey should be removed when ID become binary
-    <<NumberKey:?KEY_LENGTH>> = HashedKey,
-    ClosestPeers = handle_iterative_find_peers(Peer, NumberKey),
-    lists:foreach(fun(Contact) -> peer:store(Contact, {NumberKey, Value}, MyContact) end, ClosestPeers).
+    HashedKey = hash_key(Key),
+    ClosestPeers = handle_iterative_find_peers(Peer, HashedKey),
+    lists:foreach(fun(Contact) -> peer:store(Contact, {HashedKey, Value}, MyContact) end, ClosestPeers).
 
 handle_join(#peer{kbucket = Kbucket, mycontact = MyContact} = Peer, BootstrapPeer) ->
     {_, Id} = MyContact,
@@ -261,6 +257,12 @@ handle_find_value(#peer{repository = Repository} = Peer, FromContact, Key) ->
 append_unique(FirstList, SecondList) ->
     List = lists:append(FirstList, SecondList),
     sets:to_list(sets:from_list(List)).
+
+hash_key(Key) ->
+    HashedKey = crypto:hash(sha, atom_to_list(Key)),
+    %% XXX: NumberKey should be removed when ID become binary
+    <<NumberKey:?KEY_LENGTH>> = HashedKey,
+    NumberKey.
 
 -ifdef(TEST).
 -include_lib("../test/peer.hrl").
