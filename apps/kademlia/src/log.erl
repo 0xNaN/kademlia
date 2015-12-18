@@ -5,8 +5,7 @@
 -export([contact_to_field/2]).
 -export([pid_to_field/2]).
 
-
--record(peer, {mycontact, repository, kbucket}).
+-include("peer.hrl").
 -record(kbucket, {peer, k, contacts, keylength}).
 
 peer(Peer, Fields, Message) ->

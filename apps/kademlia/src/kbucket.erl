@@ -85,12 +85,12 @@ handle_k_closest_to(#kbucket{k = K}, Key, ListOfContacts) ->
     SortedContacts = sort_on(Key, ListOfContacts),
     lists:sublist(SortedContacts, K).
 
-handle_refresh(#kbucket{peer = Peer}, Keylength) ->
+handle_refresh(#kbucket{peer = Peer, contacts = Contacts}, Keylength) ->
+    StartingBucket = first_occupied_bucket(Contacts) + 1,
+    EndBucket = Keylength - 1,
     lists:foreach(fun(Index) ->
-                          %% NOTE: maybe we can call only handle_refresh on a new
-                          %% process
-                     spawn(kbucket, refresh_bucket, [self(), Index, Peer])
-                  end, lists:seq(0, Keylength - 1)).
+                    spawn(kbucket, refresh_bucket, [self(), Index, Peer])
+                  end, lists:seq(StartingBucket, EndBucket)).
 
 handle_closest_contacts(#kbucket{k = K, contacts = Contacts}, Key) ->
     SortedContacts = sort_on(Key, contacts_to_list(Contacts)),
@@ -118,7 +118,7 @@ put_on(Bucket, Contact, _) ->
 refresh_bucket(Kbucket, BucketIndex, {_, PeerId} = Peer) ->
     Key = gen_key_within(BucketIndex, PeerId),
     ClosestPeers = peer:iterative_find_peers(Peer, Key),
-    [kbucket:put(Kbucket, Contact) || Contact <- lists:delete(Peer, ClosestPeers)].
+    [kbucket:put(Kbucket, Contact) || Contact <- ClosestPeers].
 
 bucket(BucketIndex, Contacts) ->
     case maps:is_key(BucketIndex, Contacts) of
@@ -145,6 +145,16 @@ bucket_index(Distance) ->
 
 gen_key_within(BucketIndex, Id) ->
     trunc(math:pow(2, BucketIndex)) bxor Id.
+
+first_occupied_bucket(Contacts) ->
+    Indices = maps:keys(Contacts),
+    case length(Indices) =:= 0 of
+        true  -> -1;
+        false ->
+            NotEmptyBuckets = lists:dropwhile(fun(I) -> length(bucket(I, Contacts)) =:= 0 end,
+                                              maps:keys(Contacts)),
+            hd(NotEmptyBuckets)
+    end.
 
 -ifdef(TEST).
 -compile([export_all]).
