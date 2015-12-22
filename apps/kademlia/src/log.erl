@@ -3,7 +3,7 @@
 -export([kbucket/3, kbucket/4]).
 -export([pid_to_field/2]).
 -export([contact_to_field/2]).
--export([pid_to_field/2]).
+-export([log/3]).
 
 -include("peer.hrl").
 -record(kbucket, {peer, k, contacts, keylength}).
@@ -13,7 +13,7 @@ peer(Peer, Fields, Message) ->
 peer(Peer, Fields, Message, Args) ->
     #peer{kbucket = Kbucket, repository = Repository, mycontact = {_, Id}} = Peer,
     PeerFields = [{kbucket, pid_to_list(Kbucket)},
-                  {repository, Repository},
+                  {repository, pid_to_list(Repository)},
                   {id, Id},
                   {module, peer}],
     log(PeerFields ++ Fields, Message, Args).

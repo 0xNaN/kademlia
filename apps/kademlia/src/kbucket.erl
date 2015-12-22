@@ -157,6 +157,6 @@ first_occupied_bucket(Contacts) ->
     end.
 
 -ifdef(TEST).
--compile([export_all]).
+% -compile([export_all]).
 -include_lib("../test/kbucket.hrl").
 -endif.

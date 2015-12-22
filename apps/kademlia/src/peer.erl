@@ -12,8 +12,7 @@
 -export([store/3]).
 
 -include("peer.hrl").
--define (TIMEOUT_REQUEST, 1000).
--define (ALPHA, 3).
+-define (TIMEOUT_REQUEST, 500).
 -define (KEY_LENGTH, 160).
 
 
@@ -28,7 +27,16 @@ start(Id, K, Alpha) ->
     PeerContact.
 
 build_peer(Id, Kbucket, Alpha) ->
-    Peer = #peer{repository = #{}, kbucket = Kbucket, mycontact = {self(), Id}, alpha = Alpha},
+    {ok, RpcHandler} = gen_event:start(),
+    {ok, Repository} = gen_server:start(repository, [], []),
+
+    Peer = #peer{repository = Repository,
+                 kbucket = Kbucket,
+                 mycontact = {self(), Id},
+                 alpha = Alpha,
+                 rpc_handler = RpcHandler},
+
+    gen_event:add_handler(RpcHandler, rpc_handler, Peer),
     Peer.
 
 iterative_find_peers({PeerPid, _} = Peer, Key) ->
@@ -61,24 +69,24 @@ check_link({PeerPid, _} = Peer, WithPeer) ->
             ko
     end.
 
-store({PeerPid, _}, {Key, Value}, FromPeer) ->
-    PeerPid ! {store, FromPeer, {Key, Value}},
+store(Peer, {Key, Value}, FromPeer) ->
+    call_rpc(Peer, store, FromPeer, [{Key, Value}]),
     ok.
 
-find_closest_peers({PeerPid, _}, Key, FromPeer) ->
-    PeerPid ! {find_closest_peers, FromPeer, Key, self()},
+find_closest_peers(Peer, Key, FromPeer) ->
+    call_rpc(Peer, find_closest_peers, FromPeer, [Key]),
     ok.
 
-find_value_of({PeerPid, _}, Key, FromPeer) ->
-    PeerPid ! {find_value, FromPeer, Key, self()},
+find_value_of(Peer, Key, FromPeer) ->
+    call_rpc(Peer, find_value, FromPeer, [Key]),
     ok.
 
-ping({PeerPid, _}, FromPeer) ->
-    PeerPid ! {ping, FromPeer},
+ping(Peer, FromPeer) ->
+    call_rpc(Peer, ping, FromPeer, []),
     ok.
 
 pong({PeerPid, _}, FromPeer) ->
-    PeerPid ! {pong, FromPeer},
+    PeerPid ! {rpc, pong, self(), FromPeer, []},
     ok.
 
 join({PeerPid, _} = Peer, BootstrapPeer) ->
@@ -88,37 +96,22 @@ join({PeerPid, _} = Peer, BootstrapPeer) ->
             ok
     end.
 
-loop(#peer{kbucket = Kbucket, repository = Repository, mycontact = MyContact} = Peer) ->
+call_rpc({ToPeerPid, _}, RpcName, FromContact, Args) ->
+    ToPeerPid ! {rpc, RpcName, self(), FromContact, Args}.
+
+loop(#peer{kbucket = Kbucket, mycontact = MyContact, rpc_handler = RpcHandler} = Peer) ->
     receive
-        {store, FromContact, {Key, Value}} ->
-            log:peer(Peer, log:contact_to_field(FromContact, "from"), "STORE ~p ~p", [Key, Value]),
+        {rpc, RpcName, FromPid, FromContact, Args} ->
+            log:peer(Peer, log:contact_to_field(FromContact, "from_contact") ++
+                           log:pid_to_field(FromPid, "from"), "~p ~p", [RpcName, Args]),
+
             kbucket:put(Kbucket, FromContact),
-            NewRepository = Repository#{Key => Value},
-            NewPeer = Peer#peer{repository = NewRepository},
-            loop(NewPeer);
-        {ping, FromContact} ->
-            log:peer(Peer, log:contact_to_field(FromContact, "from"), "PING"),
-            kbucket:put(Kbucket, FromContact),
-            pong(FromContact, MyContact),
-            loop(Peer);
-        {pong, FromContact} ->
-            log:peer(Peer, log:contact_to_field(FromContact, "from"), "PONG"),
-            handle_pong(Peer, FromContact),
-            loop(Peer);
-        {find_closest_peers, FromContact, Key, From} ->
-            log:peer(Peer, log:contact_to_field(FromContact, "from"), "FIND_CLOSEST_PEERS ~p", [Key]),
-            kbucket:put(Kbucket, FromContact),
-            FilteredClosestPeers = handle_find_closest_peers(Peer, FromContact, Key),
-            From ! {MyContact, FilteredClosestPeers},
-            loop(Peer);
-        {find_value, FromContact, Key, From} ->
-            log:peer(Peer, log:contact_to_field(FromContact, "from"), "FIND_VALUE ~p", [Key]),
-            kbucket:put(Kbucket, FromContact),
-            ResponseValue = handle_find_value(Peer, FromContact, Key),
-            From ! {MyContact, ResponseValue},
+            ok = gen_event:notify(RpcHandler, {RpcName, FromPid, FromContact, Args}),
             loop(Peer);
         {check_link, From, ToContact} ->
-            log:peer(Peer, log:contact_to_field(ToContact, "to") ++ log:pid_to_field(From, "from"), "CHECK_LINK ~p",[self()]),
+            log:peer(Peer, log:contact_to_field(ToContact, "to") ++
+                           log:pid_to_field(From, "from"), "CHECK_LINK ~p",[self()]),
+
             Result = handle_check_link(Peer, MyContact, ToContact),
             From ! {MyContact, Result},
             loop(Peer);
@@ -163,8 +156,8 @@ handle_join(#peer{kbucket = Kbucket, mycontact = MyContact} = Peer, BootstrapPee
 handle_check_link(Peer, MyContact, ToContact) ->
     ping(ToContact, MyContact),
     receive
-        {pong, ToContact} ->
-            handle_pong(Peer, ToContact),
+        {rpc, pong, FromPid, ToContact, []} ->
+            peer:pong(MyContact, ToContact),
             ok
     after ?TIMEOUT_REQUEST ->
             ko
@@ -175,22 +168,6 @@ handle_iterative_find_peers(#peer{kbucket = Kbucket, mycontact = MyContact, alph
 
 handle_iterative_find_value(#peer{kbucket = Kbucket, mycontact = MyContact, alpha = Alpha}, Key) ->
     network:find_value(MyContact, Kbucket, Key, Alpha).
-
-handle_pong(#peer{kbucket = Kbucket}, FromContact) ->
-    kbucket:put(Kbucket, FromContact).
-
-handle_find_closest_peers(#peer{kbucket = Kbucket}, FromContact, Key) ->
-    ClosestPeers = kbucket:closest_contacts(Kbucket, Key),
-    lists:delete(FromContact, ClosestPeers).
-
-handle_find_value(#peer{repository = Repository} = Peer, FromContact, Key) ->
-    case maps:is_key(Key, Repository) of
-        true ->
-            #{Key := Value} = Repository,
-            {found, Value};
-        false ->
-            handle_find_closest_peers(Peer, FromContact, Key)
-    end.
 
 hash_key(Key) ->
     HashedKey = crypto:hash(sha, atom_to_list(Key)),

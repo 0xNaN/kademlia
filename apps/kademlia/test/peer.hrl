@@ -16,8 +16,8 @@ teardown({_, _}) ->
     meck:unload(kbucket).
 
 peer_suite_test_() ->
-    [?setup(fun should_store_data/1),
-     ?setup(fun should_overwrite_data_with_same_key/1),
+     [?setup(fun should_store_data/1),
+     % ?setup(fun should_overwrite_data_with_same_key/1),
      ?setup(fun should_answer_with_pong_to_a_ping/1),
      ?setup(fun should_update_kbucket_if_receive_a_pong/1),
      ?setup(fun should_contact_the_kbucket_for_its_closest_peer_to_a_key/1),
@@ -56,7 +56,7 @@ should_answer_with_pong_to_a_ping({Peer, KbucketPid}) ->
     meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:ping(Peer, FakePeer),
 
-    ?receiving({pong, Peer},
+    ?receiving({rpc, pong, _FromPid, _Peer, []},
                     [?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))]).
 
 should_update_kbucket_if_receive_a_pong({Peer, KbucketPid}) ->
@@ -64,7 +64,6 @@ should_update_kbucket_if_receive_a_pong({Peer, KbucketPid}) ->
 
     meck:expect(kbucket, put, ?two_any_args(?return(ok))),
     peer:pong(Peer, FakePeer),
-    timer:sleep(10),
 
     [?_assert(meck:called(kbucket, put, [KbucketPid, FakePeer]))].
 

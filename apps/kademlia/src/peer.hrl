@@ -1,1 +1,1 @@
--record(peer, {mycontact, repository, kbucket, alpha}).
+-record(peer, {mycontact, repository, kbucket, alpha, rpc_handler}).
