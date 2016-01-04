@@ -149,14 +149,14 @@ handle_join(#peer{kbucket = Kbucket, mycontact = MyContact} = Peer, BootstrapPee
     {_, Id} = MyContact,
     MyKClosest = peer:iterative_find_peers(BootstrapPeer, Id),
     lists:foreach(fun(Neighbor) ->
-                      handle_check_link(Peer, MyContact, Neighbor)
+                      peer:ping(Neighbor, MyContact)
                   end, lists:delete(MyContact, MyKClosest)),
     kbucket:refresh(Kbucket).
 
 handle_check_link(Peer, MyContact, ToContact) ->
     ping(ToContact, MyContact),
     receive
-        {rpc, pong, FromPid, ToContact, []} ->
+        {rpc, pong, _FromPid, _ToContact, []} ->
             peer:pong(MyContact, ToContact),
             ok
     after ?TIMEOUT_REQUEST ->

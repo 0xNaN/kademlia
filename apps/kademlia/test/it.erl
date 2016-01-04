@@ -195,6 +195,7 @@ join_should_update_kbucket_of_bootstrap_peer_test() ->
      peer:join(PeerC, PeerB),
      peer:join(PeerD, PeerC),
 
+     timer:sleep(50),
      ?assertEqual([PeerD],        kbucket:get(KbucketA, 1)),
      ?assertEqual([PeerB, PeerC], kbucket:get(KbucketA, 3)),
 
@@ -231,6 +232,7 @@ should_store_a_key_on_closest_peers_test() ->
     timer:sleep(50),
 
     peer:iterative_store(PeerA, {Key, Value}),
+    timer:sleep(50),
 
     peer:find_value_of(PeerA, HashKey, FakePeer),
     ?receiving({PeerA, ResponseA}, ?assertEqual({found, Value}, ResponseA)),
